@@ -1,0 +1,23 @@
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Configuration & Secrets
+.env
+
+# Local Databases & Storage (SQLite, ChromaDB)
+data/
+
+# Temporary / Source folders
+source/
+sources/
