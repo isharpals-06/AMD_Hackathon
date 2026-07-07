@@ -1,16 +1,18 @@
 import logging
+import json
 import re
 from app.services.ollama_client import OllamaClient
+from app import config
 
 logger = logging.getLogger(__name__)
 
-# Try to import chromadb. If not installed, we fallback gracefully to regex.
+# Try to import chromadb. If not installed, we fallback gracefully.
 try:
     import chromadb
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
-    logger.warning("chromadb library not available. TaskClassifier will run in regex-only mode.")
+    logger.warning("chromadb library not available. TaskClassifier will run in SLM + Regex mode.")
 
 class TaskClassifier:
     def __init__(self, persist_directory: str = "./data/chromadb"):
@@ -20,55 +22,39 @@ class TaskClassifier:
         
         if CHROMADB_AVAILABLE:
             try:
-                # Initialize local ChromaDB client (in-memory or persistent)
+                # Initialize local ChromaDB client for vector lookup fallback
                 self.chroma_client = chromadb.PersistentClient(path=persist_directory)
                 self.collection = self.chroma_client.get_or_create_collection(name="routing_seed_prompts")
                 self._seed_database_if_empty()
             except Exception as e:
-                logger.error(f"Failed to initialize ChromaDB: {e}. Falling back to Regex.")
+                logger.error(f"Failed to initialize ChromaDB: {e}.")
 
     def _seed_database_if_empty(self):
-        """Pre-populates the vector DB with seed examples if empty."""
+        """Pre-populates ChromaDB with seed examples for vector fallback."""
         if self.collection.count() == 0:
             logger.info("Seeding ChromaDB with category examples...")
-            
-            # Example prompts mapping to categories
             seed_data = [
                 # Math Tasks
                 ("Solve for x: 3x + 5 = 20", "math"),
                 ("What is the derivative of sin(x) * cos(x)?", "math"),
                 ("Calculate the integral of x^2 from 0 to 5.", "math"),
                 ("Prove that the square root of 2 is irrational.", "math"),
-                ("Find the eigenvalues of the following matrix.", "math"),
                 
                 # Coding Tasks
                 ("Write a Python function to sort a list using quicksort.", "coding"),
                 ("Implement a binary search tree in C++.", "coding"),
                 ("How do I fix a NullPointerException in Java?", "coding"),
-                ("Create a REST API endpoint in Go using Gin.", "coding"),
-                ("Generate a CSS stylesheet for a dark mode layout.", "coding"),
                 
-                # Research / RAG Tasks
+                # Research Tasks
                 ("Summarize the main events of World War II.", "research"),
                 ("Explain the concept of quantum computing in detail.", "research"),
-                ("Search for the latest news on AI safety regulation.", "research"),
                 ("What are the primary causes of global inflation in 2026?", "research"),
-                ("Compare and contrast photosynthesis and cellular respiration.", "research"),
                 
                 # Casual Chat Tasks
                 ("Hello! How are you doing today?", "casual_chat"),
                 ("Tell me a funny joke about programming.", "casual_chat"),
-                ("What is your favorite book and why?", "casual_chat"),
-                ("Hey, let's chat about gaming.", "casual_chat"),
                 ("Who are you, and what can you do?", "casual_chat")
             ]
-            
-            # For seeding in a hackathon context, we can add mock embeddings or generate them.
-            # In a real environment, we'd query Ollama for embeddings.
-            # To avoid blocker dependencies on Day 1, we seed with dummy vectors
-            # and generate actual embeddings dynamically when classification runs.
-            # Here we just insert the texts and metadata. ChromaDB allows adding text with metadata.
-            # We can use ChromaDB's default embedding function or add documents directly.
             for i, (text, category) in enumerate(seed_data):
                 self.collection.add(
                     documents=[text],
@@ -77,54 +63,121 @@ class TaskClassifier:
                 )
 
     def classify_regex(self, prompt: str) -> str:
-        """Regex-based keyword classification fallback."""
+        """Tier 3: Regex-based keyword classification fallback."""
         prompt_lower = prompt.lower()
-        
-        # Math detection
         if any(kw in prompt_lower for kw in ["solve", "calculate", "derivative", "integral", "equation", "matrix", "math", "sum of"]):
             return "math"
-            
-        # Code review / Coding detection
         if any(kw in prompt_lower for kw in ["write a function", "implement", "debug", "code", "class ", "def ", "function", "javascript", "python", "c++", "rust"]):
             return "coding"
-            
-        # Research / RAG detection
         if any(kw in prompt_lower for kw in ["summarize", "research", "explain", "compare", "contrast", "history of", "latest news", "abstract"]):
             return "research"
-            
-        # Default fallback
         return "casual_chat"
 
-    async def classify(self, prompt: str, force_fallback: bool = False) -> str:
-        """Classifies the prompt into 'math', 'coding', 'research', or 'casual_chat'."""
-        if force_fallback or not CHROMADB_AVAILABLE or not self.collection:
-            logger.info("Running regex-based classification fallback.")
-            return self.classify_regex(prompt)
+    async def classify_chromadb(self, prompt: str) -> str:
+        """Tier 2: ChromaDB Vector search classification fallback."""
+        if not CHROMADB_AVAILABLE or not self.collection:
+            raise ValueError("ChromaDB is not initialized.")
             
+        # 1. Generate embedding using Ollama nomic-embed-text
+        embedding = await OllamaClient.get_embedding(prompt)
+        if not embedding:
+            raise ValueError("Empty embedding returned from Ollama")
+            
+        # 2. Query ChromaDB for closest match
+        results = self.collection.query(
+            query_embeddings=[embedding],
+            n_results=3
+        )
+        
+        # 3. Extract matching categories
+        metadatas = results.get("metadatas", [[]])[0]
+        categories = [m.get("category") for m in metadatas if m]
+        if not categories:
+            raise ValueError("No matching categories found in ChromaDB query")
+            
+        # 4. Return majority class
+        return max(set(categories), key=categories.count)
+
+    async def classify(self, prompt: str, force_fallback: bool = False) -> dict:
+        """
+        Classifies prompt using 3 progressive fallback tiers:
+        Tier 1: Fine-Tuned SLM (Llama 3.2 1B QLoRA)
+        Tier 2: Vector Search (ChromaDB + nomic-embed-text)
+        Tier 3: Keywords (Regex rules)
+        """
+        if force_fallback:
+            logger.info("Forcing fallback routing.")
+            category = self.classify_regex(prompt)
+            return {"category": category, "primary_model": "ollama:gemma-4-31b-it", "fallback_model": "ollama:gemma-4-26b-a4b-it"}
+
+        # --- TIER 1: Fine-Tuned SLM ---
         try:
-            # 1. Generate embedding using Ollama nomic-embed-text
-            embedding = await OllamaClient.get_embedding(prompt)
-            if not embedding:
-                raise ValueError("Empty embedding returned from Ollama")
+            logger.info(f"Tier 1: Querying local SLM router: {config.OLLAMA_ROUTER_MODEL}")
+            instruction_prompt = f"""### Instruction:
+You are an intelligent AI model router.
+
+Analyze the user's request and decide:
+1. Task category
+2. Best model to handle the request
+3. Backup model if the first model fails
+
+Return only JSON output.
+
+### User Request:
+{prompt}
+
+### Response:
+"""
+            result = await OllamaClient.generate(instruction_prompt, model=config.OLLAMA_ROUTER_MODEL)
+            output_text = result.get("text", "").strip()
+            
+            decision = json.loads(output_text)
+            logger.info(f"Tier 1 SLM routing decision succeeded: {decision}")
+            return {
+                "category": decision.get("task_type", "casual_chat"),
+                "primary_model": decision.get("primary_model", "ollama:minimax-m3"),
+                "fallback_model": decision.get("fallback_model", "ollama:gemma-4-26b-a4b-it")
+            }
+        except Exception as slm_err:
+            logger.warning(f"Tier 1 SLM router failed: {slm_err}. Switching to Tier 2 (ChromaDB).")
+
+        # --- TIER 2: ChromaDB Vector Match ---
+        try:
+            category = await self.classify_chromadb(prompt)
+            logger.info(f"Tier 2 ChromaDB classification succeeded: '{category}'")
+            
+            # Default model mapping for category
+            primary = "ollama:minimax-m3"
+            if category == "coding":
+                primary = "ollama:kimi-k2p7-code"
+            elif category == "math":
+                primary = "ollama:gemma-4-31b-it"
+            elif category == "research":
+                primary = "ollama:gemma-4-26b-a4b-it"
                 
-            # 2. Query ChromaDB for the closest vector
-            results = self.collection.query(
-                query_embeddings=[embedding],
-                n_results=3
-            )
+            return {
+                "category": category,
+                "primary_model": primary,
+                "fallback_model": "ollama:gemma-4-26b-a4b-it"
+            }
+        except Exception as chroma_err:
+            logger.warning(f"Tier 2 ChromaDB failed: {chroma_err}. Switching to Tier 3 (Regex).")
+
+        # --- TIER 3: Regex Fallback ---
+        category = self.classify_regex(prompt)
+        logger.info(f"Tier 3 Regex classification succeeded: '{category}'")
+        primary = "ollama:minimax-m3"
+        if category == "coding":
+            primary = "ollama:kimi-k2p7-code"
+        elif category == "math":
+            primary = "ollama:gemma-4-31b-it"
+        elif category == "research":
+            primary = "ollama:gemma-4-26b-a4b-it"
             
-            # 3. Extract matching categories
-            metadatas = results.get("metadatas", [[]])[0]
-            categories = [m.get("category") for m in metadatas if m]
-            
-            if not categories:
-                raise ValueError("No matching categories found in ChromaDB query")
-                
-            # 4. Perform majority voting
-            majority_class = max(set(categories), key=categories.count)
-            logger.info(f"Vector DB classified prompt as: {majority_class} (K-NN matches: {categories})")
-            return majority_class
-            
-        except Exception as e:
-            logger.error(f"Error in Vector DB classification: {e}. Falling back to Regex.")
-            return self.classify_regex(prompt)
+        return {
+            "category": category,
+            "primary_model": primary,
+            "fallback_model": "ollama:gemma-4-26b-a4b-it"
+        }
+
+

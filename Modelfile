@@ -1,0 +1,32 @@
+# Ollama Modelfile for Fine-Tuned Llama 3.2 Router
+# This Modelfile loads the base Llama 3.2 1B model and applies the QLoRA adapter weights.
+
+# 1. Base Model
+FROM llama3.2:1b
+
+# 2. Path to the fine-tuned QLoRA adapter
+ADAPTER ./Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb/final_model/adapter_model.safetensors
+
+# 3. Parameters
+PARAMETER temperature 0.2
+PARAMETER stop "<|eot_id|>"
+
+# 4. System prompt matches training format
+SYSTEM """You are an intelligent AI model router.
+
+Analyze the user's request and decide:
+1. Task category
+2. Best model to handle the request
+3. Backup model if the first model fails
+
+Return only JSON output.
+"""
+
+# 5. Prompt Template matches Llama 3.2 structure
+TEMPLATE """{{ if .System }}<|start_header_id|>system<|end_header_id|>
+
+{{ .System }}<|eot_id|>{{ end }}{{ if .Prompt }}<|start_header_id|>user<|end_header_id|>
+
+{{ .Prompt }}<|eot_id|>{{ end }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ .Output }}<|eot_id|>"""

@@ -43,7 +43,8 @@ async def process_prompt(request: ProcessRequest):
         logger.info(f"Using manual task_type override: {task_type}")
     else:
         if classifier_service:
-            task_type = await classifier_service.classify(request.prompt)
+            decision = await classifier_service.classify(request.prompt)
+            task_type = decision.get("category", "casual_chat")
         else:
             task_type = "casual_chat"
             logger.warning("Classifier service not available. Defaulting to casual_chat.")

@@ -12,9 +12,10 @@ HOST = os.getenv("HOST", "0.0.0.0")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen:7b")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+OLLAMA_ROUTER_MODEL = os.getenv("OLLAMA_ROUTER_MODEL", "llama3-router")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10.0"))
 
-# ChromaDB settings
+# ChromaDB settings (kept for reference, but disabled)
 CHROMADB_DIR = os.getenv("CHROMADB_DIR", "./data/chromadb")
 
 # Fireworks settings

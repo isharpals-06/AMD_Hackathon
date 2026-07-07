@@ -1,10 +1,11 @@
 class RoutingEngine:
-    # Model pricing constants for Cost Calculator
-    # Price per 1k tokens: (Input Price, Output Price)
+    # Model pricing constants for virtual cost tracking (USD per 1M tokens)
     MODEL_PRICING = {
-        "ollama:qwen": (0.0, 0.0),
-        "fireworks:mixtral": (0.0005, 0.0015),
-        "fireworks:qwen-72b": (0.0003, 0.0010)
+        "ollama:minimax-m3": (0.15, 0.15),
+        "ollama:kimi-k2p7-code": (0.35, 0.35),
+        "ollama:gemma-4-26b-a4b-it": (0.80, 0.80),
+        "ollama:gemma-4-31b-it": (1.20, 1.20),
+        "ollama:gemma-4-31b-it-nvfp4": (1.00, 1.00)
     }
 
     @staticmethod
@@ -12,27 +13,27 @@ class RoutingEngine:
         """Returns the routing instructions (primary, fallback, timeout) for a task type."""
         routing_rules = {
             "math": {
-                "primary_model": "fireworks:qwen-72b",
-                "fallback_model": "fireworks:mixtral",
-                "timeout_seconds": 15,
+                "primary_model": "ollama:gemma-4-31b-it",
+                "fallback_model": "ollama:gemma-4-31b-it-nvfp4",
+                "timeout_seconds": 25,
                 "max_retries": 1
             },
             "coding": {
-                "primary_model": "fireworks:mixtral",
-                "fallback_model": "fireworks:qwen-72b",
-                "timeout_seconds": 15,
+                "primary_model": "ollama:kimi-k2p7-code",
+                "fallback_model": "ollama:gemma-4-31b-it",
+                "timeout_seconds": 25,
                 "max_retries": 1
             },
             "research": {
-                "primary_model": "fireworks:mixtral",
-                "fallback_model": "ollama:qwen",
-                "timeout_seconds": 15,
+                "primary_model": "ollama:gemma-4-26b-a4b-it",
+                "fallback_model": "ollama:gemma-4-31b-it",
+                "timeout_seconds": 25,
                 "max_retries": 1
             },
             "casual_chat": {
-                "primary_model": "ollama:qwen",
-                "fallback_model": "fireworks:mixtral",
-                "timeout_seconds": 10,
+                "primary_model": "ollama:minimax-m3",
+                "fallback_model": "ollama:gemma-4-26b-a4b-it",
+                "timeout_seconds": 15,
                 "max_retries": 1
             }
         }
@@ -44,6 +45,7 @@ class RoutingEngine:
     def calculate_cost(cls, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculates cost in USD based on model parameters and token count."""
         price_rates = cls.MODEL_PRICING.get(model, (0.0, 0.0))
-        input_cost = (input_tokens * price_rates[0]) / 1000.0
-        output_cost = (output_tokens * price_rates[1]) / 1000.0
+        input_cost = (input_tokens * price_rates[0]) / 1000000.0
+        output_cost = (output_tokens * price_rates[1]) / 1000000.0
         return input_cost + output_cost
+

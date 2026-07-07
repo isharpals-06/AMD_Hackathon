@@ -22,24 +22,20 @@ An intelligent, self-resilient API routing gateway designed for the **AMD Develo
 
 ```
 multi-model-router/
-├── app/
-│   ├── main.py                 # FastAPI application routes (/process, /metrics, /health)
-│   ├── config.py               # Settings and configuration loader (.env)
-│   ├── database.py             # SQLite database operations and aggregates
-│   ├── models.py               # Pydantic schemas for requests/responses/errors
-│   └── services/
-│       ├── classifier.py       # ChromaDB vector search & regex fallback classifier
-│       ├── executor.py         # Multi-model execution and retry orchestration
-│       ├── router.py           # Model selection and token pricing rules
-│       ├── ollama_client.py    # Local Ollama connection client
-│       └── fireworks_client.py # Cloud Fireworks API connection client
-├── Documentation/              # PRD, TDD, and Test cases
+├── notebook_code.py            # Clean Python implementation of router cells for notebook
+├── Documentation/              # System architecture, setup guides, and test cases
+│   ├── PRD_MultiModelRouter.md
+│   ├── TDD_MultiModelRouter.md
+│   ├── Developer_Setup_Guide.md
+│   ├── Test_Plan_and_Cases.md
+│   └── Updated_Hackathon_Plan.md
 ├── scripts/
-│   ├── init_db.py              # SQLite database initializer
-│   └── health_check.py         # Integration dependency checker
-├── requirements.txt            # Python dependencies list
-├── .env.example                # Example configuration template
-└── .gitignore                  # Git ignore rules
+│   ├── init_db.py              # SQLite database table initializer
+│   ├── merge_lora.py           # LoRA weight merging script (optional)
+│   └── generate_dataset.py     # Generates synthetic local datasets (2000 rows CSV)
+├── requirements.txt            # Python environment dependencies
+├── Modelfile                   # Ollama local model build template for QLoRA
+└── .gitignore                  # Git tracking ignore rules
 ```
 
 ---
@@ -64,26 +60,22 @@ cp .env.example .env
 python scripts/init_db.py
 ```
 
-### 4. Run the Health Check
-Verify Ollama models (`qwen:7b`, `nomic-embed-text`) and Fireworks connections are operational:
+### 4. Run the Jupyter Notebook Server
+Launch JupyterLab on your AMD Cloud instance to run the model router:
 ```bash
-python scripts/health_check.py
+jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
 ```
 
-### 5. Start the Server
-Run the FastAPI application locally:
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-Access the interactive documentation at `http://localhost:8000/docs`.
+### 5. Open the Router Notebook
+1. Open the notebook `Multi_Model_Router_AMD_Cloud.ipynb` in your browser.
+2. Reference or copy the clean Python cells from [notebook_code.py](file:///mnt/c/Users/ishar/Projects/AMD/app/notebook_code.py) to implement the core VRAM Manager and Routing Engine.
+3. Run the cells to interact with the widgets interface.
 
 ---
 
-## 👥 Team Roles (6-Person)
+## 👥 Team Roles (4-Person Restructure)
 
-*   **Person 1: Backend/Router Architecture** - FastAPI setup and core router decision engine.
-*   **Person 2: Task Classifier** - ChromaDB vector database setup and fallback regex logic.
-*   **Person 3: Model Integrations** - Fireworks and Ollama API clients with token tracking.
-*   **Person 4: Database & Metrics Logging** - SQLite database logging and cost aggregate metrics.
-*   **Person 5: Frontend & Dashboard** - Web UI (React + Vite) dashboard and Click CLI tool.
-*   **Person 6: QA, DevOps & Presentation** - Pytest suite, Docker Compose, benchmarking, and video/slides preparation.
+*   **Person 1: Lead Architect & GPU VRAM Systems (User)** - Configures PyTorch memory hooks on ROCm, manages the dynamic model loader/unloader (`empty_cache`/`gc`), and maintains the SQLite logging backend.
+*   **Person 2: Task Classifier & NLP Engine** - Sets up the in-memory ChromaDB instance in the notebook, integrates local embedding encoders, and manages regex fallback rules.
+*   **Person 3: Model Integrations & ROCm Tuning** - Integrates HuggingFace model weight pipelines, tunes parameters (quantization/precision) for local target models (`minimax-m3`, `kimi-k2p7-code`, `gemma-4` series), and tracks tokens.
+*   **Person 4: Notebook UI, Analytics Dashboard & QA** - Builds the interactive widgets console, compiles metric summaries, executes the test suite, and conducts benchmarking checks for final submission.
