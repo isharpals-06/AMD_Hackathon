@@ -1,121 +1,73 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { BrainCircuit, LayoutDashboard, FlaskConical, BarChart3, Activity } from 'lucide-react'
+import HomePage from '@/pages/HomePage'
+import PlaygroundPage from '@/pages/PlaygroundPage'
+import MetricsPage from '@/pages/MetricsPage'
 import './App.css'
 
+const NAV_ITEMS = [
+  { id: 'home',       label: 'Dashboard',  icon: LayoutDashboard },
+  { id: 'playground', label: 'Playground', icon: FlaskConical },
+  { id: 'metrics',    label: 'Metrics',    icon: BarChart3 },
+]
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [page, setPage] = useState('home')
+
+  const renderPage = () => {
+    switch (page) {
+      case 'playground': return <PlaygroundPage />
+      case 'metrics':    return <MetricsPage />
+      default:           return <HomePage onNavigate={setPage} />
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="app-shell">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar__brand">
+          <BrainCircuit size={24} strokeWidth={1.5} />
+          <span>MultiRouter</span>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
+        <nav className="sidebar__nav">
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              id={`nav-${id}`}
+              className={`nav-item ${page === id ? 'nav-item--active' : ''}`}
+              onClick={() => setPage(id)}
+            >
+              <Icon size={18} strokeWidth={1.5} />
+              {label}
+            </button>
+          ))}
+        </nav>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div className="sidebar__footer">
+          <span className="status-dot status-dot--live" aria-label="System online" />
+          <span>AMD ROCm Ready</span>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </aside>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {/* Main content */}
+      <main className="main-content" id="main-content">
+        <header className="topbar">
+          <div className="topbar__breadcrumb">
+            {NAV_ITEMS.find(n => n.id === page)?.label ?? 'Dashboard'}
+          </div>
+          <div className="topbar__status">
+            <Activity size={14} />
+            <span>Backend: <strong>/api/health</strong></span>
+          </div>
+        </header>
+
+        <div className="page-container">
+          {renderPage()}
+        </div>
+      </main>
+    </div>
   )
 }
 

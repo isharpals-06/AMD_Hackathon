@@ -1,6 +1,7 @@
 import uuid
 import logging
-from fastapi import FastAPI, HTTPException, status
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, status
 from app import config
 from app.models import ProcessRequest, ProcessResponse, ErrorResponse, RouteMetadata, TokenMetrics, CostMetrics
 from app.services.classifier import TaskClassifier
@@ -14,29 +15,37 @@ from app.database import log_request, get_aggregate_metrics, init_db
 logging.basicConfig(level=config.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application startup and shutdown lifecycle."""
+    # ── Startup ────────────────────────────────────────────────────────────
+    logger.info("Initializing SQLite database...")
+    init_db()
+
+    logger.info("Initializing ChromaDB classifier service...")
+    app.state.classifier = TaskClassifier(persist_directory=config.CHROMADB_DIR)
+
+    yield  # Application is running
+
+    # ── Shutdown ───────────────────────────────────────────────────────────
+    logger.info("Shutting down router service.")
+
+
 app = FastAPI(
     title="SLM-Based Intelligent Multi-Model Router",
     description="Intelligent API router optimized for local SLMs on AMD ROCm GPUs and cloud fallbacks.",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan,
 )
 
-# Initialize database and classifier on startup
-classifier_service = None
-
-@app.on_event("startup")
-def startup_event():
-    global classifier_service
-    logger.info("Initializing SQLite database...")
-    init_db()
-    
-    logger.info("Initializing ChromaDB classifier service...")
-    classifier_service = TaskClassifier(persist_directory=config.CHROMADB_DIR)
-
 @app.post("/process", response_model=ProcessResponse, responses={500: {"model": ErrorResponse}})
-async def process_prompt(request: ProcessRequest):
+async def process_prompt(request: ProcessRequest, http_request: Request):
     request_id = str(uuid.uuid4())
     logger.info(f"Received request {request_id}")
-    
+
+    classifier_service: TaskClassifier | None = getattr(http_request.app.state, "classifier", None)
+
     # 1. Classify task type (use override if provided, otherwise run semantic classification)
     if request.task_type:
         task_type = request.task_type

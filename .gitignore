@@ -1,3 +1,4 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
 # Virtual Environment
 venv/
 env/
@@ -12,12 +13,31 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Local Configuration & Secrets
+# ─── Secrets & Environment ────────────────────────────────────────────────────
+# Root backend secrets
 .env
+# Frontend secrets
+frontend/.env
 
-# Local Databases & Storage (SQLite, ChromaDB)
-data/
+# ─── Runtime Data (SQLite, ChromaDB) ─────────────────────────────────────────
+# Keep data/ folder tracked via data/.gitkeep, but ignore generated files inside
+data/*.db
+data/*.sqlite
+data/chroma/
 
-# Temporary / Source folders
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# ─── Temporary / Source folders ───────────────────────────────────────────────
 source/
 sources/
+
+# ─── OS & Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
