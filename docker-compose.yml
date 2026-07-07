@@ -1,0 +1,93 @@
+services:
+
+  # ── Ollama — Local SLM Inference ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: amd_router_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"          # expose for optional local debugging
+    volumes:
+      - ollama_models:/root/.ollama   # persist pulled models across restarts
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - router_net
+
+    # ── AMD ROCm GPU passthrough (uncomment on AMD ROCm host) ──────────────────
+    # devices:
+    #   - /dev/kfd
+    #   - /dev/dri
+    # group_add:
+    #   - video
+    #   - render
+    # environment:
+    #   - HSA_OVERRIDE_GFX_VERSION=11.0.0   # adjust for your GPU gfx version
+
+  # ── Backend — FastAPI Router API ─────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: amd_router_backend
+    restart: unless-stopped
+    env_file:
+      - .env                   # FIREWORKS_API_KEY + overrides loaded here
+    environment:
+      # Override Ollama URL to use the service name instead of localhost
+      OLLAMA_URL: http://ollama:11434
+      # SQLite and ChromaDB paths inside the container's data volume
+      DATABASE_URL: sqlite:////app/data/metrics.db
+      CHROMADB_DIR: /app/data/chromadb
+    volumes:
+      - router_data:/app/data  # shared persistent storage for DB + ChromaDB
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - router_net
+
+  # ── Frontend — Nginx serving React SPA + API proxy ───────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: amd_router_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"                # only public-facing port
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - router_net
+
+# ── Named Volumes ──────────────────────────────────────────────────────────────
+volumes:
+  ollama_models:
+    name: amd_router_ollama_models
+  router_data:
+    name: amd_router_data
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  router_net:
+    name: amd_router_net
+    driver: bridge

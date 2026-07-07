@@ -1,0 +1,37 @@
+# ─── Version Control ──────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+env/
+.venv/
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ─── Runtime Data ─────────────────────────────────────────────────────────────
+data/
+
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+.env
+frontend/.env
+
+# ─── Documentation & Notebooks ────────────────────────────────────────────────
+Documentation/
+*.ipynb
+*.md
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
