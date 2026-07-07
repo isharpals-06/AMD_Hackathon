@@ -5,13 +5,14 @@
 
 ## 👥 Restructured Roles & Deliverables
 
-### 👤 Person 1: Lead Architect & GPU VRAM Systems (You)
-*   **Focus:** Core server integration, VRAM memory lifecycle manager, and logging schema.  
+### 👤 Person 1: Lead Architect, Ollama & Model Systems (You)
+*   **Focus:** Ollama server configs, local model loading pipelines, tokenizer setups, and VRAM management.  
 *   **Tasks:**
-    *   Build backend wrapper functions to handle local VRAM tracking.
-    *   Initialize the SQLite database schema to store token and latency telemetry.
-    *   Lead server configuration and ROCm execution environment setup.
-*   **Day 5 Deliverable:** End-to-end routing backend with zero memory leakage under sequential stress.
+    *   Configure local Ollama and compile the fine-tuned `llama3-router` using the Modelfile.
+    *   Set up CPU/GPU model swap wrappers and cache-clearing mechanisms (`keep_alive: 0` offloading).
+    *   Implement loading and tokenization pipelines for the 5 target models on local ROCm GPU.
+    *   Execute the HF weight warming and caching script (`cache_models.py`) on the AMD Cloud instance.
+*   **Day 5 Deliverable:** Robust local model loading and swapping pipeline with optimized VRAM offloading.
 
 ---
 
@@ -25,13 +26,13 @@
 
 ---
 
-### 👤 Person 3: Model Integrations & ROCm Tuning
-*   **Focus:** Model weight downloads, quantization parameters, and generation execution.  
+### 👤 Person 3: SQLite Database & Telemetry Metrics
+*   **Focus:** Persistent backend logging, token analytics, and cost metrics.  
 *   **Tasks:**
-    *   Write HuggingFace model loading and tokenization routines.
-    *   Apply `BitsAndBytesConfig` 4-bit precision to fit the larger 31B models in GPU memory.
-    *   Build token counters to record inputs/outputs tokens.
-*   **Day 5 Deliverable:** Cached local weights running successfully on ROCm with optimized precision.
+    *   Configure the SQLite database schema to log active models, swaps, and latencies.
+    *   Write SQL aggregate queries to service the `/metrics` dashboard backend.
+    *   Build virtual cost calculators and comparison logic relative to baseline.
+*   **Day 5 Deliverable:** Persistent database backend delivering real-time aggregated latency and cost reports.
 
 ---
 
