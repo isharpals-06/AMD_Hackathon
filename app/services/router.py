@@ -1,3 +1,5 @@
+from app import config
+
 class RoutingEngine:
     # Model pricing constants for virtual cost tracking (USD per 1M tokens)
     MODEL_PRICING = {
@@ -13,26 +15,26 @@ class RoutingEngine:
         """Returns the routing instructions (primary, fallback, timeout) for a task type."""
         routing_rules = {
             "math": {
-                "primary_model": "ollama:gemma-4-31b-it",
-                "fallback_model": "ollama:gemma-4-31b-it-nvfp4",
+                "primary_model": config.MATH_PRIMARY_MODEL,
+                "fallback_model": config.MATH_FALLBACK_MODEL,
                 "timeout_seconds": 25,
                 "max_retries": 1
             },
             "coding": {
-                "primary_model": "ollama:kimi-k2p7-code",
-                "fallback_model": "ollama:gemma-4-31b-it",
+                "primary_model": config.CODING_PRIMARY_MODEL,
+                "fallback_model": config.CODING_FALLBACK_MODEL,
                 "timeout_seconds": 25,
                 "max_retries": 1
             },
             "research": {
-                "primary_model": "ollama:gemma-4-26b-a4b-it",
-                "fallback_model": "ollama:gemma-4-31b-it",
+                "primary_model": config.RESEARCH_PRIMARY_MODEL,
+                "fallback_model": config.RESEARCH_FALLBACK_MODEL,
                 "timeout_seconds": 25,
                 "max_retries": 1
             },
             "casual_chat": {
-                "primary_model": "ollama:minimax-m3",
-                "fallback_model": "ollama:gemma-4-26b-a4b-it",
+                "primary_model": config.CASUAL_PRIMARY_MODEL,
+                "fallback_model": config.CASUAL_FALLBACK_MODEL,
                 "timeout_seconds": 15,
                 "max_retries": 1
             }

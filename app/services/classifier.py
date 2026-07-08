@@ -105,10 +105,31 @@ class TaskClassifier:
         Tier 2: Vector Search (ChromaDB + nomic-embed-text)
         Tier 3: Keywords (Regex rules)
         """
+        # Pre-check Ollama health to prevent long connection timeouts (default: 30s)
+        ollama_active = await OllamaClient.check_health()
+        
+        if not ollama_active:
+            logger.info("Ollama server is offline. Bypassing Tiers 1 & 2 to prevent timeout hangs.")
+            category = self.classify_regex(prompt)
+            # Default model mapping for category
+            primary = config.CASUAL_PRIMARY_MODEL
+            if category == "coding":
+                primary = config.CODING_PRIMARY_MODEL
+            elif category == "math":
+                primary = config.MATH_PRIMARY_MODEL
+            elif category == "research":
+                primary = config.RESEARCH_PRIMARY_MODEL
+                
+            return {
+                "category": category,
+                "primary_model": primary,
+                "fallback_model": config.CASUAL_FALLBACK_MODEL
+            }
+
         if force_fallback:
             logger.info("Forcing fallback routing.")
             category = self.classify_regex(prompt)
-            return {"category": category, "primary_model": "ollama:gemma-4-31b-it", "fallback_model": "ollama:gemma-4-26b-a4b-it"}
+            return {"category": category, "primary_model": config.MATH_PRIMARY_MODEL, "fallback_model": config.MATH_FALLBACK_MODEL}
 
         # --- TIER 1: Fine-Tuned SLM ---
         try:
@@ -131,12 +152,35 @@ Return only JSON output.
             result = await OllamaClient.generate(instruction_prompt, model=config.OLLAMA_ROUTER_MODEL)
             output_text = result.get("text", "").strip()
             
-            decision = json.loads(output_text)
+            # Robust JSON extraction from LLM output
+            import re
+            json_match = re.search(r'\{.*\}', output_text, re.DOTALL)
+            if json_match:
+                decision = json.loads(json_match.group(0))
+            else:
+                decision = json.loads(output_text)
+                
             logger.info(f"Tier 1 SLM routing decision succeeded: {decision}")
+            category = decision.get("task_type") or decision.get("category") or "casual_chat"
+            
+            # Map category to configured cloud Hugging Face models as requested
+            primary = config.CASUAL_PRIMARY_MODEL
+            fallback = config.CASUAL_FALLBACK_MODEL
+            
+            if category == "coding":
+                primary = config.CODING_PRIMARY_MODEL
+                fallback = config.CODING_FALLBACK_MODEL
+            elif category == "math":
+                primary = config.MATH_PRIMARY_MODEL
+                fallback = config.MATH_FALLBACK_MODEL
+            elif category == "research":
+                primary = config.RESEARCH_PRIMARY_MODEL
+                fallback = config.RESEARCH_FALLBACK_MODEL
+                
             return {
-                "category": decision.get("task_type", "casual_chat"),
-                "primary_model": decision.get("primary_model", "ollama:minimax-m3"),
-                "fallback_model": decision.get("fallback_model", "ollama:gemma-4-26b-a4b-it")
+                "category": category,
+                "primary_model": primary,
+                "fallback_model": fallback
             }
         except Exception as slm_err:
             logger.warning(f"Tier 1 SLM router failed: {slm_err}. Switching to Tier 2 (ChromaDB).")
@@ -147,18 +191,18 @@ Return only JSON output.
             logger.info(f"Tier 2 ChromaDB classification succeeded: '{category}'")
             
             # Default model mapping for category
-            primary = "ollama:minimax-m3"
+            primary = config.CASUAL_PRIMARY_MODEL
             if category == "coding":
-                primary = "ollama:kimi-k2p7-code"
+                primary = config.CODING_PRIMARY_MODEL
             elif category == "math":
-                primary = "ollama:gemma-4-31b-it"
+                primary = config.MATH_PRIMARY_MODEL
             elif category == "research":
-                primary = "ollama:gemma-4-26b-a4b-it"
+                primary = config.RESEARCH_PRIMARY_MODEL
                 
             return {
                 "category": category,
                 "primary_model": primary,
-                "fallback_model": "ollama:gemma-4-26b-a4b-it"
+                "fallback_model": config.CASUAL_FALLBACK_MODEL
             }
         except Exception as chroma_err:
             logger.warning(f"Tier 2 ChromaDB failed: {chroma_err}. Switching to Tier 3 (Regex).")
@@ -166,18 +210,18 @@ Return only JSON output.
         # --- TIER 3: Regex Fallback ---
         category = self.classify_regex(prompt)
         logger.info(f"Tier 3 Regex classification succeeded: '{category}'")
-        primary = "ollama:minimax-m3"
+        primary = config.CASUAL_PRIMARY_MODEL
         if category == "coding":
-            primary = "ollama:kimi-k2p7-code"
+            primary = config.CODING_PRIMARY_MODEL
         elif category == "math":
-            primary = "ollama:gemma-4-31b-it"
+            primary = config.MATH_PRIMARY_MODEL
         elif category == "research":
-            primary = "ollama:gemma-4-26b-a4b-it"
+            primary = config.RESEARCH_PRIMARY_MODEL
             
         return {
             "category": category,
             "primary_model": primary,
-            "fallback_model": "ollama:gemma-4-26b-a4b-it"
+            "fallback_model": config.CASUAL_FALLBACK_MODEL
         }
 
 

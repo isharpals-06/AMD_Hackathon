@@ -25,5 +25,21 @@ FIREWORKS_TIMEOUT = float(os.getenv("FIREWORKS_TIMEOUT", "15.0"))
 # Database settings
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/metrics.db")
 
+# HuggingFace token
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+
+# Model Mapping Overrides (Dynamic Local 8GB GPU vs Cloud scaling)
+MATH_PRIMARY_MODEL = os.getenv("MATH_PRIMARY_MODEL", "huggingface:Qwen/Qwen2.5-Math-7B-Instruct")
+MATH_FALLBACK_MODEL = os.getenv("MATH_FALLBACK_MODEL", "huggingface:meta-llama/Llama-3.1-8B-Instruct")
+
+CODING_PRIMARY_MODEL = os.getenv("CODING_PRIMARY_MODEL", "huggingface:Qwen/Qwen2.5-Coder-32B-Instruct")
+CODING_FALLBACK_MODEL = os.getenv("CODING_FALLBACK_MODEL", "huggingface:Qwen/Qwen2.5-Coder-7B-Instruct")
+
+RESEARCH_PRIMARY_MODEL = os.getenv("RESEARCH_PRIMARY_MODEL", "huggingface:meta-llama/Llama-3.1-8B-Instruct")
+RESEARCH_FALLBACK_MODEL = os.getenv("RESEARCH_FALLBACK_MODEL", "huggingface:microsoft/Phi-3-mini-4k-instruct")
+
+CASUAL_PRIMARY_MODEL = os.getenv("CASUAL_PRIMARY_MODEL", "huggingface:microsoft/Phi-3-mini-4k-instruct")
+CASUAL_FALLBACK_MODEL = os.getenv("CASUAL_FALLBACK_MODEL", "huggingface:Qwen/Qwen2.5-7B-Instruct")
+
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

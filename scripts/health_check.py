@@ -16,17 +16,17 @@ async def check_systems():
     print("1. Testing Ollama connection...", end="")
     ollama_ok = await OllamaClient.check_health()
     if ollama_ok:
-        print(" [✓ CONNECTED]")
+        print(" [CONNECTED]")
     else:
-        print(" [✗ DISCONNECTED] - Make sure Ollama is serving at http://localhost:11434")
+        print(" [DISCONNECTED] - Make sure Ollama is serving at http://localhost:11434")
 
     # 2. Check Fireworks API
     print("2. Testing Fireworks API connectivity...", end="")
     fireworks_ok = await FireworksClient.check_health()
     if fireworks_ok:
-        print(" [✓ CONNECTED]")
+        print(" [CONNECTED]")
     else:
-        print(" [✗ DISCONNECTED] - Verify FIREWORKS_API_KEY is configured in .env")
+        print(" [DISCONNECTED] - Verify FIREWORKS_API_KEY is configured in .env")
 
     # 3. Check SQLite DB
     print("3. Checking SQLite DB state...", end="")
@@ -34,9 +34,9 @@ async def check_systems():
     try:
         metrics = get_aggregate_metrics()
         db_ok = True
-        print(" [✓ HEALTHY]")
+        print(" [HEALTHY]")
     except Exception as e:
-        print(f" [✗ ERROR] - {e}")
+        print(f" [ERROR] - {e}")
         
     print("\n--- Summary ---")
     if ollama_ok and fireworks_ok and db_ok:

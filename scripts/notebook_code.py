@@ -159,7 +159,7 @@ class TaskClassifier:
     def classify_with_slm(prompt: str) -> dict:
         """Loads the fine-tuned Llama 3.2 1B router model, runs inference to get routing JSON, and unloads it."""
         router_model_name = "llama-router"
-        adapter_path = "./Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb/final_model"
+        adapter_path = "./notebooks/final_model"
         base_model_path = "meta-llama/Llama-3.2-1B"
         
         # 1. Load the routing SLM (unloading other models automatically to save VRAM)

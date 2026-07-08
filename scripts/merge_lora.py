@@ -7,8 +7,8 @@ from peft import PeftModel
 # Set up paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_MODEL_NAME = "meta-llama/Llama-3.2-1B"
-ADAPTER_DIR = os.path.join(BASE_DIR, "Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb", "final_model")
-OUTPUT_DIR = os.path.join(BASE_DIR, "Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb", "merged_model")
+ADAPTER_DIR = os.path.join(BASE_DIR, "notebooks", "final_model")
+OUTPUT_DIR = os.path.join(BASE_DIR, "notebooks", "merged_model")
 
 def main():
     print(f"Loading base model: {BASE_MODEL_NAME}...")

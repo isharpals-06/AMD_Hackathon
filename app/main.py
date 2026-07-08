@@ -124,6 +124,31 @@ async def process_prompt(request: ProcessRequest, http_request: Request):
         )
     )
 
+@app.get("/config")
+def get_config():
+    """Returns active models and configuration targets."""
+    return {
+        "status": "success",
+        "models": {
+            "math": {
+                "primary": config.MATH_PRIMARY_MODEL,
+                "fallback": config.MATH_FALLBACK_MODEL
+            },
+            "coding": {
+                "primary": config.CODING_PRIMARY_MODEL,
+                "fallback": config.CODING_FALLBACK_MODEL
+            },
+            "research": {
+                "primary": config.RESEARCH_PRIMARY_MODEL,
+                "fallback": config.RESEARCH_FALLBACK_MODEL
+            },
+            "casual": {
+                "primary": config.CASUAL_PRIMARY_MODEL,
+                "fallback": config.CASUAL_FALLBACK_MODEL
+            }
+        }
+    }
+
 @app.get("/metrics")
 def get_metrics():
     """Returns aggregated performance and cost savings metrics."""

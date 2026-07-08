@@ -36,10 +36,19 @@ export default function PlaygroundPage() {
         body: JSON.stringify({ prompt, task_type: taskType || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Request failed')
+      if (!res.ok) {
+        const detailMsg = typeof data.detail === 'object' 
+          ? (data.detail.detail || data.detail.error || JSON.stringify(data.detail)) 
+          : data.detail;
+        throw new Error(detailMsg || 'Request failed')
+      }
       setResult(data)
     } catch (err) {
-      setError(err.message)
+      if (err && typeof err === 'object') {
+        setError(err.message || JSON.stringify(err))
+      } else {
+        setError(String(err))
+      }
     } finally {
       setLoading(false)
     }

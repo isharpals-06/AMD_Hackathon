@@ -74,7 +74,7 @@ def get_aggregate_metrics():
             COUNT(*) as total_requests,
             SUM(CASE WHEN status LIKE 'success%' THEN 1 ELSE 0 END) as successful_requests,
             SUM(CASE WHEN final_model_used LIKE 'ollama:%' THEN tokens_used ELSE 0 END) as local_tokens,
-            SUM(CASE WHEN final_model_used LIKE 'fireworks:%' THEN tokens_used ELSE 0 END) as cloud_tokens,
+            SUM(CASE WHEN final_model_used NOT LIKE 'ollama:%' THEN tokens_used ELSE 0 END) as cloud_tokens,
             SUM(cost_usd) as total_cost,
             AVG(latency_ms) as avg_latency_ms,
             SUM(CASE WHEN fallback_model_used = 1 THEN 1 ELSE 0 END) as fallback_count

@@ -64,13 +64,31 @@ class OllamaClient:
     @staticmethod
     async def get_embedding(text: str) -> list:
         """Generates embedding vector for a string using local embed model."""
-        url = f"{config.OLLAMA_URL}/api/embeddings"
-        payload = {
+        # Try newer /api/embed first
+        embed_url = f"{config.OLLAMA_URL}/api/embed"
+        embed_payload = {
             "model": config.OLLAMA_EMBED_MODEL,
-            "prompt": text
+            "input": text
         }
         
         async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT) as client:
+            try:
+                response = await client.post(embed_url, json=embed_payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    # /api/embed returns "embeddings" (a list of vectors)
+                    embeddings_list = data.get("embeddings", [])
+                    if embeddings_list:
+                        return embeddings_list[0]
+            except Exception as e:
+                logger.warning(f"Ollama /api/embed failed, trying fallback: {e}")
+                
+            # Fallback to older /api/embeddings
+            url = f"{config.OLLAMA_URL}/api/embeddings"
+            payload = {
+                "model": config.OLLAMA_EMBED_MODEL,
+                "prompt": text
+            }
             response = await client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
