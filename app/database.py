@@ -68,22 +68,52 @@ def get_aggregate_metrics():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get general counts
+    # 1. General counts and rates
     cursor.execute("""
         SELECT 
             COUNT(*) as total_requests,
             SUM(CASE WHEN status LIKE 'success%' THEN 1 ELSE 0 END) as successful_requests,
-            SUM(tokens_used) as total_tokens,
+            SUM(CASE WHEN final_model_used LIKE 'ollama:%' THEN tokens_used ELSE 0 END) as local_tokens,
+            SUM(CASE WHEN final_model_used LIKE 'fireworks:%' THEN tokens_used ELSE 0 END) as cloud_tokens,
             SUM(cost_usd) as total_cost,
             AVG(latency_ms) as avg_latency_ms,
             SUM(CASE WHEN fallback_model_used = 1 THEN 1 ELSE 0 END) as fallback_count
         FROM requests
     """)
     row = cursor.fetchone()
-    metrics = dict(row) if row else {}
     
-    # Calculate savings vs baseline (assuming Fireworks Mixtral for all as baseline)
-    # Baseline cost: $0.0005 per 1k input tokens, $0.0015 per 1k output tokens
+    total_requests = row["total_requests"] or 0
+    successful_requests = row["successful_requests"] or 0
+    local_tokens = row["local_tokens"] or 0
+    cloud_tokens = row["cloud_tokens"] or 0
+    total_cost_usd = row["total_cost"] or 0.0
+    avg_latency_ms = row["avg_latency_ms"] or 0.0
+    fallback_count = row["fallback_count"] or 0
+    
+    fallback_rate = fallback_count / total_requests if total_requests > 0 else 0.0
+    success_rate = successful_requests / total_requests if total_requests > 0 else 0.0
+    
+    # 2. Counts by task type
+    cursor.execute("SELECT task_type, COUNT(*) as cnt FROM requests GROUP BY task_type")
+    task_type_counts = {r["task_type"]: r["cnt"] for r in cursor.fetchall()}
+    
+    # 3. Avg latency by task type
+    cursor.execute("SELECT task_type, AVG(latency_ms) as avg_lat FROM requests GROUP BY task_type")
+    avg_latency_by_type = {r["task_type"]: r["avg_lat"] for r in cursor.fetchall()}
+    
+    metrics = {
+        "total_requests": total_requests,
+        "total_cost_usd": total_cost_usd,
+        "local_tokens_used": local_tokens,
+        "cloud_tokens_used": cloud_tokens,
+        "fallback_rate": fallback_rate,
+        "success_rate": success_rate,
+        "avg_latency_ms": avg_latency_ms,
+        "task_type_counts": task_type_counts,
+        "avg_latency_by_type": avg_latency_by_type
+    }
+    
+    # Calculate savings vs baseline
     cursor.execute("""
         SELECT 
             SUM(input_tokens) as total_input,
@@ -93,15 +123,17 @@ def get_aggregate_metrics():
     """)
     totals = cursor.fetchone()
     if totals and totals["total_input"] is not None:
-        baseline_cost = (totals["total_input"] * 0.0005 / 1000) + (totals["total_output"] * 0.0015 / 1000)
-        actual_cost = metrics.get("total_cost", 0) or 0
+        # Baseline cost calculation: assuming gemma-4-31b-it rates for all as baseline ($1.20 per 1M tokens)
+        baseline_rate = 1.20 / 1000000.0
+        total_tokens = totals["total_input"] + totals["total_output"]
+        baseline_cost = total_tokens * baseline_rate
         metrics["baseline_cost_usd"] = baseline_cost
-        metrics["cost_saved_usd"] = max(0.0, baseline_cost - actual_cost)
-        metrics["savings_pct"] = (metrics["cost_saved_usd"] / baseline_cost * 100) if baseline_cost > 0 else 0
+        metrics["cost_saved_usd"] = max(0.0, baseline_cost - total_cost_usd)
+        metrics["savings_pct"] = (metrics["cost_saved_usd"] / baseline_cost * 100) if baseline_cost > 0 else 0.0
     else:
-        metrics["baseline_cost_usd"] = 0
-        metrics["cost_saved_usd"] = 0
-        metrics["savings_pct"] = 0
+        metrics["baseline_cost_usd"] = 0.0
+        metrics["cost_saved_usd"] = 0.0
+        metrics["savings_pct"] = 0.0
         
     conn.close()
     return metrics

@@ -1,23 +1,63 @@
-import { useState } from 'react'
-import { BrainCircuit, Activity, FlaskConical, BarChart3, ChevronRight, Zap, Shield, Server } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { BrainCircuit, Activity, ChevronRight, Zap, Shield, Server, RefreshCw } from 'lucide-react'
 
 /**
  * HomePage — landing dashboard for the AMD Multi-Model Router.
  * Displays system overview stats and routing category cards.
  */
 export default function HomePage({ onNavigate }) {
+  const [metrics, setMetrics] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/metrics')
+        if (res.ok) {
+          const json = await res.json()
+          setMetrics(json.aggregated_metrics)
+        }
+      } catch (err) {
+        console.error("Failed to load metrics on HomePage:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadStats()
+  }, [])
+
   const stats = [
-    { label: 'Local Tokens Saved', value: '—', icon: Zap, color: 'var(--accent-green)' },
-    { label: 'Cloud Fallbacks', value: '—', icon: Shield, color: 'var(--accent-yellow)' },
-    { label: 'Avg Latency', value: '— ms', icon: Activity, color: 'var(--accent-blue)' },
-    { label: 'Cost Saved (USD)', value: '$—', icon: Server, color: 'var(--accent-purple)' },
+    { 
+      label: 'Local Tokens Routed', 
+      value: metrics ? metrics.local_tokens_used?.toLocaleString() : '—', 
+      icon: Zap, 
+      color: 'var(--accent-green)' 
+    },
+    { 
+      label: 'Fallback Swaps', 
+      value: metrics ? Math.round(metrics.fallback_rate * metrics.total_requests) : '—', 
+      icon: Shield, 
+      color: 'var(--accent-yellow)' 
+    },
+    { 
+      label: 'Avg Latency', 
+      value: metrics ? `${metrics.avg_latency_ms?.toFixed(0)} ms` : '— ms', 
+      icon: Activity, 
+      color: 'var(--accent-blue)' 
+    },
+    { 
+      label: 'Virtual Cost Saved', 
+      value: metrics ? `$${metrics.cost_saved_usd?.toFixed(4)}` : '$—', 
+      icon: Server, 
+      color: 'var(--accent-purple)' 
+    },
   ]
 
   const routes = [
-    { type: 'math', label: 'Math Tasks', model: 'Qwen-72B (Fireworks)', badge: 'Cloud' },
-    { type: 'coding', label: 'Coding / Review', model: 'Mixtral 8×7B (Fireworks)', badge: 'Cloud' },
-    { type: 'research', label: 'Research (RAG)', model: 'Mixtral 8×7B → Qwen 7B', badge: 'Hybrid' },
-    { type: 'casual', label: 'Casual Chat', model: 'Qwen 7B (Ollama — Local)', badge: 'Local' },
+    { type: 'math', label: 'Math Tasks', model: 'Gemma-4-31B-it (Ollama)', badge: 'Local' },
+    { type: 'coding', label: 'Coding / Review', model: 'Kimi-K2P7-Code (Ollama)', badge: 'Local' },
+    { type: 'research', label: 'Research (RAG)', model: 'Gemma-4-26B-a4b-it (Ollama)', badge: 'Local' },
+    { type: 'casual', label: 'Casual Chat', model: 'Minimax-M3 (Ollama)', badge: 'Local' },
   ]
 
   return (

@@ -41,3 +41,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# ─── Tests & Temporary ────────────────────────────────────────────────────────
+:memory:/
+
