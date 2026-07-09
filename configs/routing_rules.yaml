@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Routing Rules Configuration
+# These rules map task types to their primary and fallback models,
+# along with per-request timeout and retry settings.
+# ─────────────────────────────────────────────────────────────────────────────
+
+routing_rules:
+  math:
+    primary_model: "ollama:gemma-4-31b-it"
+    fallback_model: "ollama:gemma-4-31b-it-nvfp4"
+    timeout_seconds: 25
+    max_retries: 1
+    description: "High-precision math and formal proofs"
+
+  coding:
+    primary_model: "ollama:kimi-k2p7-code"
+    fallback_model: "ollama:gemma-4-31b-it"
+    timeout_seconds: 25
+    max_retries: 1
+    description: "Specialized programming and code review"
+
+  research:
+    primary_model: "ollama:gemma-4-26b-a4b-it"
+    fallback_model: "ollama:gemma-4-31b-it"
+    timeout_seconds: 25
+    max_retries: 1
+    description: "Detailed research, summarization, and data extraction"
+
+  casual_chat:
+    primary_model: "ollama:minimax-m3"
+    fallback_model: "ollama:gemma-4-26b-a4b-it"
+    timeout_seconds: 15
+    max_retries: 1
+    description: "Fast, conversational queries"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Pricing (USD per 1M tokens, input / output)
+# Used for cost tracking and savings calculations in the dashboard.
+# ─────────────────────────────────────────────────────────────────────────────
+model_pricing:
+  "ollama:minimax-m3":
+    input_per_1m: 0.15
+    output_per_1m: 0.15
+  "ollama:kimi-k2p7-code":
+    input_per_1m: 0.35
+    output_per_1m: 0.35
+  "ollama:gemma-4-26b-a4b-it":
+    input_per_1m: 0.80
+    output_per_1m: 0.80
+  "ollama:gemma-4-31b-it":
+    input_per_1m: 1.20
+    output_per_1m: 1.20
+  "ollama:gemma-4-31b-it-nvfp4":
+    input_per_1m: 1.00
+    output_per_1m: 1.00
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Baseline model for cost-savings comparison
+# ─────────────────────────────────────────────────────────────────────────────
+baseline_model: "ollama:gemma-4-31b-it"
+baseline_cost:
+  input_per_1k: 0.0005   # USD
+  output_per_1k: 0.0015  # USD

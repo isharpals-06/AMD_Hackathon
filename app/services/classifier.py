@@ -62,14 +62,49 @@ class TaskClassifier:
                     ids=[f"seed_{category}_{i}"]
                 )
 
+    def add_seeds(self, seed_data: list[tuple[str, str]]):
+        """Dynamically adds labeled examples to ChromaDB for vector fallback."""
+        if not CHROMADB_AVAILABLE or not self.collection:
+            raise ValueError("ChromaDB is not initialized.")
+            
+        import uuid
+        for text, category in seed_data:
+            seed_id = f"seed_{category}_{uuid.uuid4().hex[:8]}"
+            self.collection.add(
+                documents=[text],
+                metadatas=[{"category": category}],
+                ids=[seed_id]
+            )
+        logger.info(f"Added {len(seed_data)} seed examples to ChromaDB.")
+
     def classify_regex(self, prompt: str) -> str:
         """Tier 3: Regex-based keyword classification fallback."""
         prompt_lower = prompt.lower()
-        if any(kw in prompt_lower for kw in ["solve", "calculate", "derivative", "integral", "equation", "matrix", "math", "sum of"]):
+        
+        # Word-boundary check helper for short keywords to prevent false positives (like 'api' in 'capitalism')
+        def has_word(word: str) -> bool:
+            if len(word) <= 4 or word in ["rust", "code", "sql", "api"]:
+                return bool(re.search(r'\b' + re.escape(word) + r'\b', prompt_lower))
+            return word in prompt_lower
+
+        if any(has_word(kw) for kw in [
+            "solve", "calculate", "derivative", "integral",
+            "equation", "matrix", "math", "sum of",
+            "eigenvalue", "eigenvalues", "factorial", "polynomial",
+        ]):
             return "math"
-        if any(kw in prompt_lower for kw in ["write a function", "implement", "debug", "code", "class ", "def ", "function", "javascript", "python", "c++", "rust"]):
+        if any(has_word(kw) for kw in [
+            "write a function", "implement", "debug", "code", "class ",
+            "def ", "function", "javascript", "python", "c++", "rust",
+            "api", "endpoint", "rest api", "fastapi", "flask", "django",
+            "create a", "program", "algorithm", "sql", "database",
+        ]):
             return "coding"
-        if any(kw in prompt_lower for kw in ["summarize", "research", "explain", "compare", "contrast", "history of", "latest news", "abstract"]):
+        if any(has_word(kw) for kw in [
+            "summarize", "research", "explain", "compare", "contrast",
+            "history of", "latest news", "abstract",
+            "causes of", "effects of",
+        ]):
             return "research"
         return "casual_chat"
 
@@ -78,24 +113,19 @@ class TaskClassifier:
         if not CHROMADB_AVAILABLE or not self.collection:
             raise ValueError("ChromaDB is not initialized.")
             
-        # 1. Generate embedding using Ollama nomic-embed-text
-        embedding = await OllamaClient.get_embedding(prompt)
-        if not embedding:
-            raise ValueError("Empty embedding returned from Ollama")
-            
-        # 2. Query ChromaDB for closest match
+        # Query ChromaDB using text directly — ChromaDB handles local embedding generation automatically
         results = self.collection.query(
-            query_embeddings=[embedding],
+            query_texts=[prompt],
             n_results=3
         )
         
-        # 3. Extract matching categories
+        # Extract matching categories
         metadatas = results.get("metadatas", [[]])[0]
         categories = [m.get("category") for m in metadatas if m]
         if not categories:
             raise ValueError("No matching categories found in ChromaDB query")
             
-        # 4. Return majority class
+        # Return majority class
         return max(set(categories), key=categories.count)
 
     async def classify(self, prompt: str, force_fallback: bool = False) -> dict:

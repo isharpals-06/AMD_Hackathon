@@ -2,6 +2,7 @@ import logging
 import time
 from app.services.ollama_client import OllamaClient
 from app.services.fireworks_client import FireworksClient
+from app.services.huggingface_client import HuggingFaceClient
 from app.services.router import RoutingEngine
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ class ModelExecutor:
             # Map shorthand model name to Fireworks catalog path
             full_model_path = FIREWORKS_MODEL_MAP.get(model_name, model_name)
             return await FireworksClient.chat_completion(prompt, full_model_path)
+            
+        elif provider == "huggingface":
+            return await HuggingFaceClient.chat_completion(prompt, model_name)
             
         else:
             raise ValueError(f"Unsupported model provider: {provider}")

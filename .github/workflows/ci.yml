@@ -1,0 +1,115 @@
+name: CI — Lint, Test & Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── Job 1: Code Quality ──────────────────────────────────────────────────────
+  lint:
+    name: Code Quality (black · isort · ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting tools
+        run: pip install black isort ruff
+
+      - name: Run Black (formatting check)
+        run: black --check --diff .
+
+      - name: Run isort (import order check)
+        run: isort --check --diff .
+
+      - name: Run Ruff (style & bug checks)
+        run: ruff check .
+
+  # ── Job 2: Unit & Integration Tests ─────────────────────────────────────────
+  test:
+    name: Test Suite (pytest + coverage)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    env:
+      # Point to a dummy env so the app doesn't fail on missing secrets
+      FIREWORKS_API_KEY: "test-key-ci"
+      DATABASE_FILE: "/tmp/test_metrics.db"
+      DATABASE_URL: "sqlite:////tmp/test_metrics.db"
+      PROMETHEUS_ENABLED: "false"
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install production + dev dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run test suite
+        run: pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-report=term-missing -m "not slow and not integration or integration"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+      - name: Upload HTML coverage (optional)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: htmlcov
+          path: htmlcov/
+          retention-days: 7
+
+  # ── Job 3: Docker Build Smoke Test ──────────────────────────────────────────
+  docker-build:
+    name: Docker Build Smoke Test
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: app/Dockerfile
+          target: runtime
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: amd-router-backend:ci
+
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: frontend/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: amd-router-frontend:ci

@@ -12,7 +12,7 @@ export default function HomePage({ onNavigate }) {
   useEffect(() => {
     async function loadStats() {
       try {
-        const res = await fetch('/api/metrics')
+        const res = await fetch('/api/metrics/summary')
         if (res.ok) {
           const json = await res.json()
           setMetrics(json.aggregated_metrics)
@@ -28,26 +28,26 @@ export default function HomePage({ onNavigate }) {
 
   const stats = [
     { 
-      label: 'Local Tokens Routed', 
-      value: metrics ? metrics.local_tokens_used?.toLocaleString() : '—', 
+      label: 'Total Requests', 
+      value: metrics ? (metrics.total_requests ?? 0).toLocaleString() : '—', 
       icon: Zap, 
       color: 'var(--accent-green)' 
     },
     { 
-      label: 'Fallback Swaps', 
-      value: metrics ? Math.round(metrics.fallback_rate * metrics.total_requests) : '—', 
+      label: 'Fallback Count', 
+      value: metrics ? (metrics.fallback_count ?? 0).toLocaleString() : '—', 
       icon: Shield, 
       color: 'var(--accent-yellow)' 
     },
     { 
       label: 'Avg Latency', 
-      value: metrics ? `${metrics.avg_latency_ms?.toFixed(0)} ms` : '— ms', 
+      value: metrics ? `${(metrics.avg_latency_ms ?? 0).toFixed(0)} ms` : '— ms', 
       icon: Activity, 
       color: 'var(--accent-blue)' 
     },
     { 
-      label: 'Virtual Cost Saved', 
-      value: metrics ? `$${metrics.cost_saved_usd?.toFixed(4)}` : '$—', 
+      label: 'Cost Saved', 
+      value: metrics ? `$${(metrics.cost_saved_usd ?? 0).toFixed(4)}` : '$—', 
       icon: Server, 
       color: 'var(--accent-purple)' 
     },

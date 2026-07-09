@@ -23,7 +23,7 @@ export default function MetricsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/metrics')
+      const res = await fetch('/api/metrics/summary')
       if (!res.ok) throw new Error('Failed to fetch metrics')
       const json = await res.json()
       setData(json.aggregated_metrics)

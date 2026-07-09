@@ -5,12 +5,13 @@ from app.services.executor import ModelExecutor
 
 def test_routing_engine_rules():
     """Verify RoutingEngine returns correct rules for predefined categories."""
+    from app import config
     math_rules = RoutingEngine.get_routing("math")
-    assert math_rules["primary_model"] == "ollama:gemma-4-31b-it"
-    assert math_rules["fallback_model"] == "ollama:gemma-4-31b-it-nvfp4"
+    assert math_rules["primary_model"] == (config.MATH_PRIMARY_MODEL or "ollama:gemma-4-31b-it")
+    assert math_rules["fallback_model"] == (config.MATH_FALLBACK_MODEL or "ollama:gemma-4-31b-it-nvfp4")
 
     unknown_rules = RoutingEngine.get_routing("unknown_category")
-    assert unknown_rules["primary_model"] == "ollama:minimax-m3"
+    assert unknown_rules["primary_model"] == (config.CASUAL_PRIMARY_MODEL or "ollama:minimax-m3")
 
 def test_routing_engine_cost_calculation():
     """Verify cost calculation is accurate for inputs and outputs."""

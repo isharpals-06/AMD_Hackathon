@@ -6,7 +6,7 @@ services:
     container_name: amd_router_ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"          # expose for optional local debugging
+      - "11434:11434"          # optional direct access for debugging
     volumes:
       - ollama_models:/root/.ollama   # persist pulled models across restarts
     healthcheck:
@@ -33,18 +33,20 @@ services:
     build:
       context: .
       dockerfile: app/Dockerfile
+      target: runtime
     container_name: amd_router_backend
     restart: unless-stopped
     env_file:
-      - .env                   # FIREWORKS_API_KEY + overrides loaded here
+      - .env
     environment:
-      # Override Ollama URL to use the service name instead of localhost
       OLLAMA_URL: http://ollama:11434
-      # SQLite and ChromaDB paths inside the container's data volume
       DATABASE_URL: sqlite:////app/data/metrics.db
+      DATABASE_FILE: /app/data/metrics.db
       CHROMADB_DIR: /app/data/chromadb
+      PROMETHEUS_ENABLED: "true"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     volumes:
-      - router_data:/app/data  # shared persistent storage for DB + ChromaDB
+      - router_data:/app/data
     depends_on:
       ollama:
         condition: service_healthy
@@ -66,7 +68,7 @@ services:
     container_name: amd_router_frontend
     restart: unless-stopped
     ports:
-      - "80:80"                # only public-facing port
+      - "80:80"                # only public-facing HTTP port
     depends_on:
       backend:
         condition: service_healthy
@@ -79,12 +81,58 @@ services:
     networks:
       - router_net
 
+  # ── Prometheus — Metrics scraping ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: amd_router_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - backend
+    networks:
+      - router_net
+
+  # ── Grafana — Metrics visualisation ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: amd_router_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/router_dashboard.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - router_net
+
 # ── Named Volumes ──────────────────────────────────────────────────────────────
 volumes:
   ollama_models:
     name: amd_router_ollama_models
   router_data:
     name: amd_router_data
+  prometheus_data:
+    name: amd_router_prometheus_data
+  grafana_data:
+    name: amd_router_grafana_data
 
 # ── Networks ───────────────────────────────────────────────────────────────────
 networks:
