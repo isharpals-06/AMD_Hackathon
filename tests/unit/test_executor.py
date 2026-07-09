@@ -1,6 +1,7 @@
 """
 Unit tests for app.services.executor — ModelExecutor.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -90,8 +91,15 @@ class TestModelExecutor:
             result = await ModelExecutor.execute("Test prompt", ROUTING)
 
         required_fields = [
-            "status", "result", "final_model_used", "fallback_model_used",
-            "tokens", "cost_usd", "latency_ms", "error_message", "attempts",
+            "status",
+            "result",
+            "final_model_used",
+            "fallback_model_used",
+            "tokens",
+            "cost_usd",
+            "latency_ms",
+            "error_message",
+            "attempts",
         ]
         for field in required_fields:
             assert field in result, f"Missing field: {field}"
@@ -120,7 +128,7 @@ class TestCallModel:
             new_callable=AsyncMock,
             return_value=MOCK_RESPONSE,
         ) as mock_gen:
-            result = await ModelExecutor.call_model("ollama:minimax-m3", "Hello")
+            await ModelExecutor.call_model("ollama:minimax-m3", "Hello")
             mock_gen.assert_called_once_with("Hello", "minimax-m3")
 
     @pytest.mark.asyncio

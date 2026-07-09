@@ -19,13 +19,14 @@ Supports:
   - get_production_model(): return the current production entry
   - list_versions(): show all registered versions
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ def register_model(
     model_path: str | Path,
     accuracy: float,
     macro_f1: float,
-    parameters: Optional[dict[str, Any]] = None,
-    git_commit: Optional[str] = None,
+    parameters: dict[str, Any] | None = None,
+    git_commit: str | None = None,
 ) -> dict[str, Any]:
     """
     Register a newly trained model as 'staging'.
@@ -93,7 +94,7 @@ def register_model(
         },
         "parameters": parameters or {},
         "git_commit": git_commit,
-        "registered_at": datetime.now(timezone.utc).isoformat(),
+        "registered_at": datetime.now(UTC).isoformat(),
         "promoted_at": None,
     }
 
@@ -127,14 +128,14 @@ def promote_to_production(version: str) -> dict[str, Any]:
 
     # Promote the target
     target["stage"] = "production"
-    target["promoted_at"] = datetime.now(timezone.utc).isoformat()
+    target["promoted_at"] = datetime.now(UTC).isoformat()
 
     _save_registry(registry)
     logger.info("Promoted model version %s to production", version)
     return target
 
 
-def get_production_model() -> Optional[dict[str, Any]]:
+def get_production_model() -> dict[str, Any] | None:
     """Return the current production model entry, or None if none exists."""
     registry = _load_registry()
     for v in reversed(registry["versions"]):

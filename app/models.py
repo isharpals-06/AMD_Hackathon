@@ -6,9 +6,10 @@ Changes from v1:
   - Added input validators (prompt length cap, whitespace stripping)
   - Added TaskType literal enum for safer routing
 """
+
 from __future__ import annotations
 
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,7 +30,7 @@ class ProcessRequest(BaseModel):
             examples=["Solve for x: 3x + 5 = 20"],
         ),
     ]
-    task_type: Optional[str] = Field(
+    task_type: str | None = Field(
         default=None,
         description=(
             "Optional task-type override. "
@@ -46,20 +47,19 @@ class ProcessRequest(BaseModel):
 
     @field_validator("task_type", mode="before")
     @classmethod
-    def validate_task_type(cls, v: Optional[str]) -> Optional[str]:
+    def validate_task_type(cls, v: str | None) -> str | None:
         """Ensure manual overrides use a recognised task type."""
         if v is None:
             return v
         normalised = v.strip().lower()
         if normalised not in VALID_TASK_TYPES:
-            raise ValueError(
-                f"Invalid task_type '{v}'. Must be one of: {sorted(VALID_TASK_TYPES)}"
-            )
+            raise ValueError(f"Invalid task_type '{v}'. Must be one of: {sorted(VALID_TASK_TYPES)}")
         return normalised
 
 
 class SeedRequest(BaseModel):
     """A single labeled example for seeding the classifier."""
+
     text: str = Field(min_length=5, description="The example prompt.")
     category: str = Field(description="The category of the prompt.")
 
@@ -74,6 +74,7 @@ class SeedRequest(BaseModel):
 
 class SeedBatchRequest(BaseModel):
     """Batch payload for adding multiple seed examples."""
+
     seeds: list[SeedRequest] = Field(min_length=1, description="List of seed examples to add.")
 
 
@@ -145,7 +146,7 @@ class ServiceStatus(BaseModel):
 
     name: str
     status: str  # connected | disconnected | healthy | unhealthy
-    latency_ms: Optional[int] = None
+    latency_ms: int | None = None
 
 
 class HealthResponse(BaseModel):
@@ -172,9 +173,9 @@ class AggregateMetrics(BaseModel):
 
     total_requests: int = 0
     successful_requests: int = 0
-    total_tokens: Optional[int] = 0
-    total_cost: Optional[float] = 0.0
-    avg_latency_ms: Optional[float] = 0.0
+    total_tokens: int | None = 0
+    total_cost: float | None = 0.0
+    avg_latency_ms: float | None = 0.0
     fallback_count: int = 0
     baseline_cost_usd: float = 0.0
     cost_saved_usd: float = 0.0
@@ -189,6 +190,7 @@ class MetricsResponse(BaseModel):
 
 
 # ── ChromaDB Seeding models ───────────────────────────────────────────────────
+
 
 class SeedRequest(BaseModel):
     """Request payload to dynamically add a seed example to ChromaDB."""

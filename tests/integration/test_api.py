@@ -5,6 +5,7 @@ These tests exercise the full request/response cycle using
 TestClient with mocked external services (Ollama, Fireworks).
 No running Ollama or Fireworks instance is required.
 """
+
 from __future__ import annotations
 
 import pytest

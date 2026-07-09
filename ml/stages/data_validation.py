@@ -13,12 +13,12 @@ Checks:
 
 Returns a DataValidationReport dataclass with pass/fail details.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +96,7 @@ def validate(data_path: str | Path, min_rows: int = MIN_ROWS) -> DataValidationR
 
     # ── Check minimum rows ────────────────────────────────────────────────────
     if report.total_rows < min_rows:
-        report.errors.append(
-            f"Dataset too small: {report.total_rows} rows (minimum: {min_rows})"
-        )
+        report.errors.append(f"Dataset too small: {report.total_rows} rows (minimum: {min_rows})")
         report.passed = False
 
     # ── Check nulls ───────────────────────────────────────────────────────────

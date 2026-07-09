@@ -11,6 +11,7 @@ Logs every request with:
 Output is newline-delimited JSON, compatible with log aggregation tools
 (Loki, Datadog, CloudWatch, etc.).
 """
+
 from __future__ import annotations
 
 import logging

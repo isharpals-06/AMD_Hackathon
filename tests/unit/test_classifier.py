@@ -5,6 +5,7 @@ Tests the regex (Tier-3) classifier and the ChromaDB availability flag.
 Tier-1 (SLM) and Tier-2 (ChromaDB query) tests are mocked to avoid
 requiring running Ollama or ChromaDB services.
 """
+
 from __future__ import annotations
 
 import pytest

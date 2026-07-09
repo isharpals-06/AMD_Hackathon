@@ -4,6 +4,7 @@ Application configuration using Pydantic Settings for type-safe, validated confi
 All settings are loaded from environment variables or a .env file.
 Required secrets (FIREWORKS_API_KEY) are validated at startup.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -73,24 +74,30 @@ class Settings(BaseSettings):
 
     # ── Hugging Face Cloud API ────────────────────────────────────────────────
     hf_token: str = Field(default="", description="Hugging Face API token")
-    
+
     # ── Routing Overrides (from .env) ─────────────────────────────────────────
     math_primary_model: str = Field(default="", description="Math primary model (Hugging Face)")
     math_fallback_model: str = Field(default="", description="Math fallback model (Hugging Face)")
     coding_primary_model: str = Field(default="", description="Coding primary model (Hugging Face)")
-    coding_fallback_model: str = Field(default="", description="Coding fallback model (Hugging Face)")
-    research_primary_model: str = Field(default="", description="Research primary model (Hugging Face)")
-    research_fallback_model: str = Field(default="", description="Research fallback model (Hugging Face)")
+    coding_fallback_model: str = Field(
+        default="", description="Coding fallback model (Hugging Face)"
+    )
+    research_primary_model: str = Field(
+        default="", description="Research primary model (Hugging Face)"
+    )
+    research_fallback_model: str = Field(
+        default="", description="Research fallback model (Hugging Face)"
+    )
     casual_primary_model: str = Field(default="", description="Casual primary model (Hugging Face)")
-    casual_fallback_model: str = Field(default="", description="Casual fallback model (Hugging Face)")
+    casual_fallback_model: str = Field(
+        default="", description="Casual fallback model (Hugging Face)"
+    )
 
     # ── Database ─────────────────────────────────────────────────────────────
     database_url: str = Field(
         default="sqlite:///./data/metrics.db", description="Database connection URL"
     )
-    database_file: str = Field(
-        default="./data/metrics.db", description="SQLite database file path"
-    )
+    database_file: str = Field(default="./data/metrics.db", description="SQLite database file path")
 
     # ── Monitoring ───────────────────────────────────────────────────────────
     prometheus_enabled: bool = Field(
@@ -98,9 +105,7 @@ class Settings(BaseSettings):
     )
 
     # ── MLflow ───────────────────────────────────────────────────────────────
-    mlflow_tracking_uri: str = Field(
-        default="./mlruns", description="MLflow tracking server URI"
-    )
+    mlflow_tracking_uri: str = Field(default="./mlruns", description="MLflow tracking server URI")
     mlflow_experiment_name: str = Field(
         default="router-classifier", description="MLflow experiment name"
     )
