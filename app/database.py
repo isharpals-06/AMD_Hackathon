@@ -1,139 +1,202 @@
+"""
+SQLite database layer for request logging and metrics aggregation.
+
+Improvements over v1:
+  - Reads database path from config (no more hardcoded strings)
+  - Uses context manager for safer connection handling
+  - Added get_per_model_metrics() for Grafana dashboards
+  - Added type annotations
+"""
+from __future__ import annotations
+
+import logging
 import os
 import sqlite3
-from datetime import datetime
+from contextlib import contextmanager
+from typing import Any, Generator
 
-DATABASE_FILE = "./data/metrics.db"
+from app import config
 
-def get_db_connection():
-    os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
+logger = logging.getLogger(__name__)
+
+# ── Database path from config (no more hardcoded paths) ──────────────────────
+DATABASE_FILE: str = config.DATABASE_FILE
+
+
+@contextmanager
+def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
+    """Context manager that yields an open SQLite connection and closes it on exit."""
+    os.makedirs(os.path.dirname(os.path.abspath(DATABASE_FILE)), exist_ok=True)
     conn = sqlite3.connect(DATABASE_FILE)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Create requests table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS requests (
-            request_id TEXT PRIMARY KEY,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            prompt TEXT NOT NULL,
-            task_type TEXT,
-            prompt_length INTEGER,
-            primary_model TEXT,
-            fallback_model_used BOOLEAN DEFAULT 0,
-            final_model_used TEXT,
-            status TEXT,
-            response TEXT,
-            response_length INTEGER,
-            tokens_used INTEGER,
-            input_tokens INTEGER,
-            output_tokens INTEGER,
-            cost_usd REAL,
-            latency_ms INTEGER,
-            error_message TEXT
+
+def init_db() -> None:
+    """Create the requests table and indexes if they do not already exist."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS requests (
+                request_id      TEXT PRIMARY KEY,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                prompt          TEXT NOT NULL,
+                task_type       TEXT,
+                prompt_length   INTEGER,
+                primary_model   TEXT,
+                fallback_model_used  BOOLEAN DEFAULT 0,
+                final_model_used     TEXT,
+                status          TEXT,
+                response        TEXT,
+                response_length INTEGER,
+                tokens_used     INTEGER,
+                input_tokens    INTEGER,
+                output_tokens   INTEGER,
+                cost_usd        REAL,
+                latency_ms      INTEGER,
+                error_message   TEXT
+            )
+        """)
+
+        # Indexes for fast querying on the dashboard
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_type ON requests(task_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_status   ON requests(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON requests(created_at)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_final_model ON requests(final_model_used)"
         )
-    """)
-    
-    # Create indexes for fast querying on the dashboard
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_type ON requests(task_type)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_status ON requests(status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON requests(created_at)")
-    
-    conn.commit()
-    conn.close()
 
-def log_request(request_data: dict):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        INSERT INTO requests (
-            request_id, prompt, task_type, prompt_length, primary_model,
-            fallback_model_used, final_model_used, status, response, response_length,
-            tokens_used, input_tokens, output_tokens, cost_usd, latency_ms, error_message
-        ) VALUES (
-            :request_id, :prompt, :task_type, :prompt_length, :primary_model,
-            :fallback_model_used, :final_model_used, :status, :response, :response_length,
-            :tokens_used, :input_tokens, :output_tokens, :cost_usd, :latency_ms, :error_message
+        conn.commit()
+    logger.info("Database initialised at %s", DATABASE_FILE)
+
+
+def log_request(request_data: dict[str, Any]) -> None:
+    """Insert a completed request record into the requests table."""
+    with get_db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO requests (
+                request_id, prompt, task_type, prompt_length, primary_model,
+                fallback_model_used, final_model_used, status, response,
+                response_length, tokens_used, input_tokens, output_tokens,
+                cost_usd, latency_ms, error_message
+            ) VALUES (
+                :request_id, :prompt, :task_type, :prompt_length, :primary_model,
+                :fallback_model_used, :final_model_used, :status, :response,
+                :response_length, :tokens_used, :input_tokens, :output_tokens,
+                :cost_usd, :latency_ms, :error_message
+            )
+            """,
+            request_data,
         )
-    """, request_data)
-    
-    conn.commit()
-    conn.close()
+        conn.commit()
 
-def get_aggregate_metrics():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # 1. General counts and rates
-    cursor.execute("""
-        SELECT 
-            COUNT(*) as total_requests,
-            SUM(CASE WHEN status LIKE 'success%' THEN 1 ELSE 0 END) as successful_requests,
-            SUM(CASE WHEN final_model_used LIKE 'ollama:%' THEN tokens_used ELSE 0 END) as local_tokens,
-            SUM(CASE WHEN final_model_used NOT LIKE 'ollama:%' THEN tokens_used ELSE 0 END) as cloud_tokens,
-            SUM(cost_usd) as total_cost,
-            AVG(latency_ms) as avg_latency_ms,
-            SUM(CASE WHEN fallback_model_used = 1 THEN 1 ELSE 0 END) as fallback_count
-        FROM requests
-    """)
-    row = cursor.fetchone()
-    
-    total_requests = row["total_requests"] or 0
-    successful_requests = row["successful_requests"] or 0
-    local_tokens = row["local_tokens"] or 0
-    cloud_tokens = row["cloud_tokens"] or 0
-    total_cost_usd = row["total_cost"] or 0.0
-    avg_latency_ms = row["avg_latency_ms"] or 0.0
-    fallback_count = row["fallback_count"] or 0
-    
-    fallback_rate = fallback_count / total_requests if total_requests > 0 else 0.0
-    success_rate = successful_requests / total_requests if total_requests > 0 else 0.0
-    
-    # 2. Counts by task type
-    cursor.execute("SELECT task_type, COUNT(*) as cnt FROM requests GROUP BY task_type")
-    task_type_counts = {r["task_type"]: r["cnt"] for r in cursor.fetchall()}
-    
-    # 3. Avg latency by task type
-    cursor.execute("SELECT task_type, AVG(latency_ms) as avg_lat FROM requests GROUP BY task_type")
-    avg_latency_by_type = {r["task_type"]: r["avg_lat"] for r in cursor.fetchall()}
-    
-    metrics = {
-        "total_requests": total_requests,
-        "total_cost_usd": total_cost_usd,
-        "local_tokens_used": local_tokens,
-        "cloud_tokens_used": cloud_tokens,
-        "fallback_rate": fallback_rate,
-        "success_rate": success_rate,
-        "avg_latency_ms": avg_latency_ms,
-        "task_type_counts": task_type_counts,
-        "avg_latency_by_type": avg_latency_by_type
-    }
-    
-    # Calculate savings vs baseline
-    cursor.execute("""
-        SELECT 
-            SUM(input_tokens) as total_input,
-            SUM(output_tokens) as total_output
-        FROM requests
-        WHERE status LIKE 'success%'
-    """)
-    totals = cursor.fetchone()
-    if totals and totals["total_input"] is not None:
-        # Baseline cost calculation: assuming gemma-4-31b-it rates for all as baseline ($1.20 per 1M tokens)
-        baseline_rate = 1.20 / 1000000.0
-        total_tokens = totals["total_input"] + totals["total_output"]
-        baseline_cost = total_tokens * baseline_rate
-        metrics["baseline_cost_usd"] = baseline_cost
-        metrics["cost_saved_usd"] = max(0.0, baseline_cost - total_cost_usd)
-        metrics["savings_pct"] = (metrics["cost_saved_usd"] / baseline_cost * 100) if baseline_cost > 0 else 0.0
-    else:
-        metrics["baseline_cost_usd"] = 0.0
-        metrics["cost_saved_usd"] = 0.0
-        metrics["savings_pct"] = 0.0
-        
-    conn.close()
-    return metrics
+
+def get_aggregate_metrics() -> dict[str, Any]:
+    """Return aggregated performance and cost-savings metrics.
+
+    Includes per-task-type breakdowns that the frontend dashboard expects.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                COUNT(*)                                                        AS total_requests,
+                SUM(CASE WHEN status LIKE 'success%' THEN 1 ELSE 0 END)        AS successful_requests,
+                SUM(tokens_used)                                                AS total_tokens,
+                SUM(cost_usd)                                                   AS total_cost,
+                AVG(latency_ms)                                                 AS avg_latency_ms,
+                SUM(CASE WHEN fallback_model_used = 1 THEN 1 ELSE 0 END)       AS fallback_count
+            FROM requests
+        """)
+        row = cursor.fetchone()
+        metrics: dict[str, Any] = dict(row) if row else {}
+
+        total = metrics.get("total_requests") or 0
+        success = metrics.get("successful_requests") or 0
+        fallback = metrics.get("fallback_count") or 0
+
+        # ── Derived rates ────────────────────────────────────────────────
+        metrics["success_rate"] = round(success / total, 4) if total > 0 else 0.0
+        metrics["fallback_rate"] = round(fallback / total, 4) if total > 0 else 0.0
+        metrics["total_cost_usd"] = metrics.get("total_cost") or 0.0
+
+        # ── Per-task-type counts ─────────────────────────────────────────
+        cursor.execute("""
+            SELECT task_type, COUNT(*) AS cnt
+            FROM requests
+            WHERE task_type IS NOT NULL
+            GROUP BY task_type
+        """)
+        metrics["task_type_counts"] = {r["task_type"]: r["cnt"] for r in cursor.fetchall()}
+
+        # ── Avg latency by task type ─────────────────────────────────────
+        cursor.execute("""
+            SELECT task_type, AVG(latency_ms) AS avg_lat
+            FROM requests
+            WHERE task_type IS NOT NULL
+            GROUP BY task_type
+        """)
+        metrics["avg_latency_by_type"] = {
+            r["task_type"]: round(r["avg_lat"], 1) for r in cursor.fetchall()
+        }
+
+        # ── Token breakdown: local (ollama) vs cloud (huggingface/fireworks) ─
+        cursor.execute("""
+            SELECT
+                SUM(CASE WHEN final_model_used LIKE 'ollama:%' THEN tokens_used ELSE 0 END)       AS local_tokens,
+                SUM(CASE WHEN final_model_used NOT LIKE 'ollama:%' THEN tokens_used ELSE 0 END)   AS cloud_tokens
+            FROM requests
+            WHERE status LIKE 'success%'
+        """)
+        token_row = cursor.fetchone()
+        metrics["local_tokens_used"] = (token_row["local_tokens"] or 0) if token_row else 0
+        metrics["cloud_tokens_used"] = (token_row["cloud_tokens"] or 0) if token_row else 0
+
+        # ── Cost-savings vs. always-Fireworks baseline ───────────────────
+        cursor.execute("""
+            SELECT SUM(input_tokens) AS total_input, SUM(output_tokens) AS total_output
+            FROM requests
+            WHERE status LIKE 'success%'
+        """)
+        totals = cursor.fetchone()
+        if totals and totals["total_input"] is not None:
+            baseline_cost = (totals["total_input"] * 0.0005 / 1000) + (
+                totals["total_output"] * 0.0015 / 1000
+            )
+            actual_cost = metrics.get("total_cost") or 0.0
+            metrics["baseline_cost_usd"] = round(baseline_cost, 6)
+            metrics["cost_saved_usd"] = round(max(0.0, baseline_cost - actual_cost), 6)
+            metrics["savings_pct"] = (
+                round(metrics["cost_saved_usd"] / baseline_cost * 100, 2) if baseline_cost > 0 else 0.0
+            )
+        else:
+            metrics["baseline_cost_usd"] = 0.0
+            metrics["cost_saved_usd"] = 0.0
+            metrics["savings_pct"] = 0.0
+
+        return metrics
+
+
+def get_per_model_metrics() -> list[dict[str, Any]]:
+    """Return per-model breakdown: request count, avg latency, total cost."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                final_model_used                AS model,
+                COUNT(*)                        AS request_count,
+                AVG(latency_ms)                 AS avg_latency_ms,
+                SUM(cost_usd)                   AS total_cost_usd,
+                SUM(tokens_used)                AS total_tokens
+            FROM requests
+            WHERE final_model_used IS NOT NULL
+            GROUP BY final_model_used
+            ORDER BY request_count DESC
+        """)
+        return [dict(row) for row in cursor.fetchall()]

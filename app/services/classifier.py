@@ -62,14 +62,49 @@ class TaskClassifier:
                     ids=[f"seed_{category}_{i}"]
                 )
 
+    def add_seeds(self, seed_data: list[tuple[str, str]]):
+        """Dynamically adds labeled examples to ChromaDB for vector fallback."""
+        if not CHROMADB_AVAILABLE or not self.collection:
+            raise ValueError("ChromaDB is not initialized.")
+            
+        import uuid
+        for text, category in seed_data:
+            seed_id = f"seed_{category}_{uuid.uuid4().hex[:8]}"
+            self.collection.add(
+                documents=[text],
+                metadatas=[{"category": category}],
+                ids=[seed_id]
+            )
+        logger.info(f"Added {len(seed_data)} seed examples to ChromaDB.")
+
     def classify_regex(self, prompt: str) -> str:
         """Tier 3: Regex-based keyword classification fallback."""
         prompt_lower = prompt.lower()
-        if any(kw in prompt_lower for kw in ["solve", "calculate", "derivative", "integral", "equation", "matrix", "math", "sum of"]):
+        
+        # Word-boundary check helper for short keywords to prevent false positives (like 'api' in 'capitalism')
+        def has_word(word: str) -> bool:
+            if len(word) <= 4 or word in ["rust", "code", "sql", "api"]:
+                return bool(re.search(r'\b' + re.escape(word) + r'\b', prompt_lower))
+            return word in prompt_lower
+
+        if any(has_word(kw) for kw in [
+            "solve", "calculate", "derivative", "integral",
+            "equation", "matrix", "math", "sum of",
+            "eigenvalue", "eigenvalues", "factorial", "polynomial",
+        ]):
             return "math"
-        if any(kw in prompt_lower for kw in ["write a function", "implement", "debug", "code", "class ", "def ", "function", "javascript", "python", "c++", "rust"]):
+        if any(has_word(kw) for kw in [
+            "write a function", "implement", "debug", "code", "class ",
+            "def ", "function", "javascript", "python", "c++", "rust",
+            "api", "endpoint", "rest api", "fastapi", "flask", "django",
+            "create a", "program", "algorithm", "sql", "database",
+        ]):
             return "coding"
-        if any(kw in prompt_lower for kw in ["summarize", "research", "explain", "compare", "contrast", "history of", "latest news", "abstract"]):
+        if any(has_word(kw) for kw in [
+            "summarize", "research", "explain", "compare", "contrast",
+            "history of", "latest news", "abstract",
+            "causes of", "effects of",
+        ]):
             return "research"
         return "casual_chat"
 
@@ -78,24 +113,19 @@ class TaskClassifier:
         if not CHROMADB_AVAILABLE or not self.collection:
             raise ValueError("ChromaDB is not initialized.")
             
-        # 1. Generate embedding using Ollama nomic-embed-text
-        embedding = await OllamaClient.get_embedding(prompt)
-        if not embedding:
-            raise ValueError("Empty embedding returned from Ollama")
-            
-        # 2. Query ChromaDB for closest match
+        # Query ChromaDB using text directly — ChromaDB handles local embedding generation automatically
         results = self.collection.query(
-            query_embeddings=[embedding],
+            query_texts=[prompt],
             n_results=3
         )
         
-        # 3. Extract matching categories
+        # Extract matching categories
         metadatas = results.get("metadatas", [[]])[0]
         categories = [m.get("category") for m in metadatas if m]
         if not categories:
             raise ValueError("No matching categories found in ChromaDB query")
             
-        # 4. Return majority class
+        # Return majority class
         return max(set(categories), key=categories.count)
 
     async def classify(self, prompt: str, force_fallback: bool = False) -> dict:
@@ -105,31 +135,10 @@ class TaskClassifier:
         Tier 2: Vector Search (ChromaDB + nomic-embed-text)
         Tier 3: Keywords (Regex rules)
         """
-        # Pre-check Ollama health to prevent long connection timeouts (default: 30s)
-        ollama_active = await OllamaClient.check_health()
-        
-        if not ollama_active:
-            logger.info("Ollama server is offline. Bypassing Tiers 1 & 2 to prevent timeout hangs.")
-            category = self.classify_regex(prompt)
-            # Default model mapping for category
-            primary = config.CASUAL_PRIMARY_MODEL
-            if category == "coding":
-                primary = config.CODING_PRIMARY_MODEL
-            elif category == "math":
-                primary = config.MATH_PRIMARY_MODEL
-            elif category == "research":
-                primary = config.RESEARCH_PRIMARY_MODEL
-                
-            return {
-                "category": category,
-                "primary_model": primary,
-                "fallback_model": config.CASUAL_FALLBACK_MODEL
-            }
-
         if force_fallback:
             logger.info("Forcing fallback routing.")
             category = self.classify_regex(prompt)
-            return {"category": category, "primary_model": config.MATH_PRIMARY_MODEL, "fallback_model": config.MATH_FALLBACK_MODEL}
+            return {"category": category, "primary_model": "ollama:gemma-4-31b-it", "fallback_model": "ollama:gemma-4-26b-a4b-it"}
 
         # --- TIER 1: Fine-Tuned SLM ---
         try:
@@ -152,35 +161,12 @@ Return only JSON output.
             result = await OllamaClient.generate(instruction_prompt, model=config.OLLAMA_ROUTER_MODEL)
             output_text = result.get("text", "").strip()
             
-            # Robust JSON extraction from LLM output
-            import re
-            json_match = re.search(r'\{.*\}', output_text, re.DOTALL)
-            if json_match:
-                decision = json.loads(json_match.group(0))
-            else:
-                decision = json.loads(output_text)
-                
+            decision = json.loads(output_text)
             logger.info(f"Tier 1 SLM routing decision succeeded: {decision}")
-            category = decision.get("task_type") or decision.get("category") or "casual_chat"
-            
-            # Map category to configured cloud Hugging Face models as requested
-            primary = config.CASUAL_PRIMARY_MODEL
-            fallback = config.CASUAL_FALLBACK_MODEL
-            
-            if category == "coding":
-                primary = config.CODING_PRIMARY_MODEL
-                fallback = config.CODING_FALLBACK_MODEL
-            elif category == "math":
-                primary = config.MATH_PRIMARY_MODEL
-                fallback = config.MATH_FALLBACK_MODEL
-            elif category == "research":
-                primary = config.RESEARCH_PRIMARY_MODEL
-                fallback = config.RESEARCH_FALLBACK_MODEL
-                
             return {
-                "category": category,
-                "primary_model": primary,
-                "fallback_model": fallback
+                "category": decision.get("task_type", "casual_chat"),
+                "primary_model": decision.get("primary_model", "ollama:minimax-m3"),
+                "fallback_model": decision.get("fallback_model", "ollama:gemma-4-26b-a4b-it")
             }
         except Exception as slm_err:
             logger.warning(f"Tier 1 SLM router failed: {slm_err}. Switching to Tier 2 (ChromaDB).")
@@ -191,18 +177,18 @@ Return only JSON output.
             logger.info(f"Tier 2 ChromaDB classification succeeded: '{category}'")
             
             # Default model mapping for category
-            primary = config.CASUAL_PRIMARY_MODEL
+            primary = "ollama:minimax-m3"
             if category == "coding":
-                primary = config.CODING_PRIMARY_MODEL
+                primary = "ollama:kimi-k2p7-code"
             elif category == "math":
-                primary = config.MATH_PRIMARY_MODEL
+                primary = "ollama:gemma-4-31b-it"
             elif category == "research":
-                primary = config.RESEARCH_PRIMARY_MODEL
+                primary = "ollama:gemma-4-26b-a4b-it"
                 
             return {
                 "category": category,
                 "primary_model": primary,
-                "fallback_model": config.CASUAL_FALLBACK_MODEL
+                "fallback_model": "ollama:gemma-4-26b-a4b-it"
             }
         except Exception as chroma_err:
             logger.warning(f"Tier 2 ChromaDB failed: {chroma_err}. Switching to Tier 3 (Regex).")
@@ -210,18 +196,18 @@ Return only JSON output.
         # --- TIER 3: Regex Fallback ---
         category = self.classify_regex(prompt)
         logger.info(f"Tier 3 Regex classification succeeded: '{category}'")
-        primary = config.CASUAL_PRIMARY_MODEL
+        primary = "ollama:minimax-m3"
         if category == "coding":
-            primary = config.CODING_PRIMARY_MODEL
+            primary = "ollama:kimi-k2p7-code"
         elif category == "math":
-            primary = config.MATH_PRIMARY_MODEL
+            primary = "ollama:gemma-4-31b-it"
         elif category == "research":
-            primary = config.RESEARCH_PRIMARY_MODEL
+            primary = "ollama:gemma-4-26b-a4b-it"
             
         return {
             "category": category,
             "primary_model": primary,
-            "fallback_model": config.CASUAL_FALLBACK_MODEL
+            "fallback_model": "ollama:gemma-4-26b-a4b-it"
         }
 
 

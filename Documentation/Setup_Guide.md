@@ -35,9 +35,9 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
     ollama pull llama3.2:1b
     ollama pull nomic-embed-text
     ```
-3.  Compile your fine-tuned router model in Ollama (works cross-platform on Windows and Linux/WSL):
+3.  Compile your fine-tuned router model in Ollama:
     ```bash
-    python scripts/build_router.py
+    ollama create llama3-router -f Modelfile
     ```
 
 ---

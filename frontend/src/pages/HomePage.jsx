@@ -7,80 +7,57 @@ import { BrainCircuit, Activity, ChevronRight, Zap, Shield, Server, RefreshCw } 
  */
 export default function HomePage({ onNavigate }) {
   const [metrics, setMetrics] = useState(null)
-  const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadData() {
+    async function loadStats() {
       try {
-        const [metricsRes, configRes] = await Promise.all([
-          fetch('/api/metrics'),
-          fetch('/api/config')
-        ])
-        if (metricsRes.ok) {
-          const json = await metricsRes.json()
+        const res = await fetch('/api/metrics/summary')
+        if (res.ok) {
+          const json = await res.json()
           setMetrics(json.aggregated_metrics)
         }
-        if (configRes.ok) {
-          const json = await configRes.json()
-          setConfig(json.models)
-        }
       } catch (err) {
-        console.error("Failed to load data on HomePage:", err)
+        console.error("Failed to load metrics on HomePage:", err)
       } finally {
         setLoading(false)
       }
     }
-    loadData()
+    loadStats()
   }, [])
 
   const stats = [
     { 
-      label: 'Local Tokens Routed', 
-      value: metrics ? metrics.local_tokens_used?.toLocaleString() : '—', 
+      label: 'Total Requests', 
+      value: metrics ? (metrics.total_requests ?? 0).toLocaleString() : '—', 
       icon: Zap, 
       color: 'var(--accent-green)' 
     },
     { 
-      label: 'Fallback Swaps', 
-      value: metrics ? Math.round(metrics.fallback_rate * metrics.total_requests) : '—', 
+      label: 'Fallback Count', 
+      value: metrics ? (metrics.fallback_count ?? 0).toLocaleString() : '—', 
       icon: Shield, 
       color: 'var(--accent-yellow)' 
     },
     { 
       label: 'Avg Latency', 
-      value: metrics ? `${metrics.avg_latency_ms?.toFixed(0)} ms` : '— ms', 
+      value: metrics ? `${(metrics.avg_latency_ms ?? 0).toFixed(0)} ms` : '— ms', 
       icon: Activity, 
       color: 'var(--accent-blue)' 
     },
     { 
-      label: 'Virtual Cost Saved', 
-      value: metrics ? `$${metrics.cost_saved_usd?.toFixed(4)}` : '$—', 
+      label: 'Cost Saved', 
+      value: metrics ? `$${(metrics.cost_saved_usd ?? 0).toFixed(4)}` : '$—', 
       icon: Server, 
       color: 'var(--accent-purple)' 
     },
   ]
 
-  const getModelLabel = (type) => {
-    if (!config || !config[type]) return 'Loading...';
-    const primary = config[type].primary || '';
-    if (!primary.includes(':')) return primary;
-    const [provider, name] = primary.split(':');
-    return `${name} (${provider.toUpperCase()})`;
-  }
-
-  const getModelBadge = (type) => {
-    if (!config || !config[type]) return 'Local';
-    const primary = config[type].primary || '';
-    if (!primary.includes(':')) return 'Local';
-    return primary.startsWith('ollama') ? 'Local' : 'Cloud';
-  }
-
   const routes = [
-    { type: 'math', label: 'Math Tasks', model: getModelLabel('math'), badge: getModelBadge('math') },
-    { type: 'coding', label: 'Coding / Review', model: getModelLabel('coding'), badge: getModelBadge('coding') },
-    { type: 'research', label: 'Research (RAG)', model: getModelLabel('research'), badge: getModelBadge('research') },
-    { type: 'casual', label: 'Casual Chat', model: getModelLabel('casual'), badge: getModelBadge('casual') },
+    { type: 'math', label: 'Math Tasks', model: 'Gemma-4-31B-it (Ollama)', badge: 'Local' },
+    { type: 'coding', label: 'Coding / Review', model: 'Kimi-K2P7-Code (Ollama)', badge: 'Local' },
+    { type: 'research', label: 'Research (RAG)', model: 'Gemma-4-26B-a4b-it (Ollama)', badge: 'Local' },
+    { type: 'casual', label: 'Casual Chat', model: 'Minimax-M3 (Ollama)', badge: 'Local' },
   ]
 
   return (

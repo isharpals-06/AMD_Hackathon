@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Registry Configuration
+# Tracks registered model versions across training runs.
+# Updated automatically by ml/registry.py — do not edit manually.
+# ─────────────────────────────────────────────────────────────────────────────
+schema_version: "1.0"
+
+# ── HuggingFace model mappings (for cache_models.py) ─────────────────────────
+huggingface_models:
+  router_slm:
+    model_id: "meta-llama/Llama-3.2-1B"
+    description: "Base model for the QLoRA fine-tuned router SLM"
+    requires_token: true
+
+  minimax_m3:
+    model_id: "MiniMax/Minimax-M3"
+    description: "Primary model for casual chat"
+    requires_token: false
+
+  kimi_code:
+    model_id: "MoonshotAI/Kimi-K2P7-Code"
+    description: "Specialized coding model"
+    requires_token: false
+
+  gemma_26b:
+    model_id: "google/gemma-4-26b-a4b-it"
+    description: "Research and summarization model"
+    requires_token: true
+
+  gemma_31b:
+    model_id: "google/gemma-4-31b-it"
+    description: "High-capability math and reasoning model"
+    requires_token: true
+
+  gemma_31b_nvfp4:
+    model_id: "google/gemma-4-31b-it-nvfp4"
+    description: "FP4-quantised Gemma 31B fallback"
+    requires_token: true
+
+# ── Ollama model mappings ─────────────────────────────────────────────────────
+ollama_models:
+  - name: qwen:7b
+    purpose: general
+  - name: nomic-embed-text
+    purpose: embeddings
+  - name: llama3-router
+    purpose: routing_slm
+    build_from_modelfile: true

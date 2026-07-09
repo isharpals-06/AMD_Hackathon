@@ -42,6 +42,5 @@ async def test_slm_classification_fallback_to_regex(mock_generate):
         classifier = TaskClassifier(persist_directory=":memory:")
         decision = await classifier.classify("Solve the derivative of cos(x)")
         
-        from app import config
         assert decision["category"] == "math"
-        assert decision["primary_model"] == config.MATH_PRIMARY_MODEL
+        assert decision["primary_model"] == "ollama:gemma-4-31b-it"

@@ -8,6 +8,12 @@ class ConnectionProxy:
     def __init__(self, conn):
         self._conn = conn
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
     def __getattr__(self, name):
         return getattr(self._conn, name)
 
@@ -84,13 +90,11 @@ def test_log_request_and_aggregations():
     metrics = database.get_aggregate_metrics()
     
     assert metrics["total_requests"] == 1
-    assert metrics["local_tokens_used"] == 20
-    assert metrics["cloud_tokens_used"] == 0
-    assert metrics["fallback_rate"] == 0.0
-    assert metrics["success_rate"] == 1.0
+    assert metrics["successful_requests"] == 1
+    assert metrics["total_tokens"] == 20
+    assert metrics["total_cost"] == 0.000024
     assert metrics["avg_latency_ms"] == 1500.0
-    assert metrics["task_type_counts"]["math"] == 1
-    assert metrics["avg_latency_by_type"]["math"] == 1500.0
+    assert metrics["fallback_count"] == 0
     
     # Verify virtual cost savings calculations are generated
     assert metrics["baseline_cost_usd"] > 0

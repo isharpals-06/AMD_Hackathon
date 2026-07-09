@@ -29,7 +29,7 @@ class ModelExecutor:
             return await FireworksClient.chat_completion(prompt, full_model_path)
             
         elif provider == "huggingface":
-            return await HuggingFaceClient.generate(prompt, model_name)
+            return await HuggingFaceClient.chat_completion(prompt, model_name)
             
         else:
             raise ValueError(f"Unsupported model provider: {provider}")
@@ -87,7 +87,6 @@ class ModelExecutor:
                     "status": "failed",
                     "error": str(e_fallback)
                 })
-                
                 status = "failed"
                 error_message = f"Primary failed: {e}. Fallback failed: {e_fallback}"
         

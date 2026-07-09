@@ -5,7 +5,7 @@
 FROM llama3.2:1b
 
 # 2. Path to the fine-tuned QLoRA adapter
-ADAPTER .\adapter_model.safetensors
+ADAPTER ./Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb/final_model/adapter_model.safetensors
 
 # 3. Parameters
 PARAMETER temperature 0.2

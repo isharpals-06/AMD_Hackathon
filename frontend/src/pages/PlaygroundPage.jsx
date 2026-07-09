@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Send, Loader2, RotateCcw } from 'lucide-react'
+import { formatErrorDetail } from '../services/api'
 
 const TASK_TYPES = [
   { value: '', label: 'Auto-detect' },
@@ -36,19 +37,10 @@ export default function PlaygroundPage() {
         body: JSON.stringify({ prompt, task_type: taskType || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        const detailMsg = typeof data.detail === 'object' 
-          ? (data.detail.detail || data.detail.error || JSON.stringify(data.detail)) 
-          : data.detail;
-        throw new Error(detailMsg || 'Request failed')
-      }
+      if (!res.ok) throw new Error(formatErrorDetail(data.detail) || 'Request failed')
       setResult(data)
     } catch (err) {
-      if (err && typeof err === 'object') {
-        setError(err.message || JSON.stringify(err))
-      } else {
-        setError(String(err))
-      }
+      setError(err.message)
     } finally {
       setLoading(false)
     }
