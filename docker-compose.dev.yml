@@ -1,0 +1,28 @@
+# docker-compose.dev.yml — Development overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Hot-reload the backend source without rebuilding the image.
+# The app/ directory is volume-mounted into the container and uvicorn
+# starts with --reload so changes are picked up automatically.
+
+services:
+  backend:
+    volumes:
+      - router_data:/app/data
+      - ./app:/app/app           # mount source for hot reload
+    environment:
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      RATE_LIMIT_ENABLED: "false"
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --log-level
+      - debug
+    ports:
+      - "8000:8000"              # expose backend directly in dev

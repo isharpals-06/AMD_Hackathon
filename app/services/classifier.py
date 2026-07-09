@@ -65,11 +65,24 @@ class TaskClassifier:
     def classify_regex(self, prompt: str) -> str:
         """Tier 3: Regex-based keyword classification fallback."""
         prompt_lower = prompt.lower()
-        if any(kw in prompt_lower for kw in ["solve", "calculate", "derivative", "integral", "equation", "matrix", "math", "sum of"]):
+        if any(kw in prompt_lower for kw in [
+            "solve", "calculate", "derivative", "integral",
+            "equation", "matrix", "math", "sum of",
+            "eigenvalue", "eigenvalues", "factorial", "polynomial",
+        ]):
             return "math"
-        if any(kw in prompt_lower for kw in ["write a function", "implement", "debug", "code", "class ", "def ", "function", "javascript", "python", "c++", "rust"]):
+        if any(kw in prompt_lower for kw in [
+            "write a function", "implement", "debug", "code", "class ",
+            "def ", "function", "javascript", "python", "c++", "rust",
+            "api", "endpoint", "rest api", "fastapi", "flask", "django",
+            "create a", "program", "algorithm", "sql", "database",
+        ]):
             return "coding"
-        if any(kw in prompt_lower for kw in ["summarize", "research", "explain", "compare", "contrast", "history of", "latest news", "abstract"]):
+        if any(kw in prompt_lower for kw in [
+            "summarize", "research", "explain", "compare", "contrast",
+            "history of", "latest news", "abstract", "what is", "why does",
+            "causes of", "effects of",
+        ]):
             return "research"
         return "casual_chat"
 

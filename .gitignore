@@ -1,35 +1,43 @@
 # ─── Python ──────────────────────────────────────────────────────────────────
-# Virtual Environment
 venv/
 env/
 .venv/
-
-# Python Cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # ─── Secrets & Environment ────────────────────────────────────────────────────
-# Root backend secrets
 .env
-# Frontend secrets
 frontend/.env
 
 # ─── Runtime Data (SQLite, ChromaDB) ─────────────────────────────────────────
-# Keep data/ folder tracked via data/.gitkeep, but ignore generated files inside
 data/*.db
 data/*.sqlite
-data/chroma/
+data/chromadb/
+data/processed/
+
+# ─── ML Artifacts ─────────────────────────────────────────────────────────────
+mlruns/
+models/classifier/
+*.joblib
 
 # ─── Node / Frontend ─────────────────────────────────────────────────────────
 node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
+
+# ─── Monitoring data ─────────────────────────────────────────────────────────
+monitoring/grafana/data/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
 
 # ─── Temporary / Source folders ───────────────────────────────────────────────
 source/
