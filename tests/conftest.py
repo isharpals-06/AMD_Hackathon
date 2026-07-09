@@ -7,16 +7,16 @@ Provides:
   - mock_ollama_client: Patches OllamaClient methods
   - mock_fireworks_client: Patches FireworksClient methods
 """
+
 from __future__ import annotations
 
 import os
-import sqlite3
-import tempfile
-from typing import AsyncGenerator, Generator
+from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
 
 # ── Override database to a temp file before importing the app ─────────────────
 @pytest.fixture(scope="session", autouse=True)
@@ -26,20 +26,20 @@ def temp_db_env(tmp_path_factory):
     db_path = str(db_dir / "test_metrics.db")
     os.environ["DATABASE_FILE"] = db_path
     os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
-    os.environ["PROMETHEUS_ENABLED"] = "false"   # no prometheus in tests
-    os.environ["RATE_LIMIT_ENABLED"] = "false"   # no rate limiting in tests
-    os.environ["API_KEY_ENABLED"] = "false"       # no auth in tests
+    os.environ["PROMETHEUS_ENABLED"] = "false"  # no prometheus in tests
+    os.environ["RATE_LIMIT_ENABLED"] = "false"  # no rate limiting in tests
+    os.environ["API_KEY_ENABLED"] = "false"  # no auth in tests
     os.environ["FIREWORKS_API_KEY"] = "test-key-ci"
 
     # Clear the lru_cache so the app picks up the new env vars
     try:
         from app.config import get_settings
+
         get_settings.cache_clear()
     except Exception:
         pass
 
     yield db_path
-
 
 
 @pytest.fixture(scope="session")

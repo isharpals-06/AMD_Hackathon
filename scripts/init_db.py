@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import init_db
 
+
 def main():
     print("Initializing SQLite database...")
     try:
@@ -14,6 +15,7 @@ def main():
     except Exception as e:
         print(f"✗ Failed to initialize database: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

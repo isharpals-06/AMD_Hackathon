@@ -29,24 +29,19 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app import config
-from app.database import (
-    get_aggregate_metrics,
-    get_per_model_metrics,
-    init_db,
-    log_request,
-)
+from app.database import get_aggregate_metrics, get_per_model_metrics, init_db, log_request
 from app.middleware.logging_middleware import StructuredLoggingMiddleware
 from app.models import (
+    CostMetrics,
     ErrorResponse,
     HealthResponse,
     MetricsResponse,
     ProcessRequest,
     ProcessResponse,
     RouteMetadata,
-    TokenMetrics,
-    CostMetrics,
-    VersionResponse,
     SeedBatchRequest,
+    TokenMetrics,
+    VersionResponse,
 )
 from app.services.classifier import TaskClassifier
 from app.services.executor import ModelExecutor
@@ -62,37 +57,41 @@ _json_formatter: dict = {
 try:
     # python-json-logger ≥ 3.x uses pythonjsonlogger.json
     from pythonjsonlogger import json as _pjl_json  # noqa: F401
+
     _json_formatter["()"] = "pythonjsonlogger.json.JsonFormatter"
 except ImportError:
     try:
         # python-json-logger 2.x uses pythonjsonlogger.jsonlogger
         from pythonjsonlogger import jsonlogger as _pjl_old  # noqa: F401
+
         _json_formatter["()"] = "pythonjsonlogger.jsonlogger.JsonFormatter"
     except ImportError:
         # No JSON logger available — fall back to simple text format
         _json_formatter = {"format": "%(asctime)s %(name)s %(levelname)s %(message)s"}
 
-logging.config.dictConfig({
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "json": _json_formatter,
-        "simple": {
-            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+logging.config.dictConfig(
+    {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "json": _json_formatter,
+            "simple": {
+                "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            },
         },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json" if not config.DEBUG else "simple",
-            "stream": "ext://sys.stdout",
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "json" if not config.DEBUG else "simple",
+                "stream": "ext://sys.stdout",
+            },
         },
-    },
-    "root": {
-        "level": config.LOG_LEVEL,
-        "handlers": ["console"],
-    },
-})
+        "root": {
+            "level": config.LOG_LEVEL,
+            "handlers": ["console"],
+        },
+    }
+)
 logger = logging.getLogger(__name__)
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -195,6 +194,7 @@ async def internal_error_handler(request: Request, exc: Exception) -> JSONRespon
 #  Endpoints
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 @app.get(
     "/version",
     response_model=VersionResponse,
@@ -252,15 +252,13 @@ async def seed_classifier(
     body: SeedBatchRequest,
 ) -> dict:
     """Add labeled examples to the vector DB for classification fallback."""
-    classifier_service: TaskClassifier | None = getattr(
-        request.app.state, "classifier", None
-    )
+    classifier_service: TaskClassifier | None = getattr(request.app.state, "classifier", None)
     if not classifier_service:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Classifier service (ChromaDB) is not available.",
         )
-    
+
     seed_data = [(seed.text, seed.category) for seed in body.seeds]
     try:
         classifier_service.add_seeds(seed_data)
@@ -300,9 +298,7 @@ async def process_prompt(
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
     logger.info("Processing request [request_id=%s]", request_id)
 
-    classifier_service: TaskClassifier | None = getattr(
-        request.app.state, "classifier", None
-    )
+    classifier_service: TaskClassifier | None = getattr(request.app.state, "classifier", None)
 
     # 1. Classify task type
     if body.task_type:

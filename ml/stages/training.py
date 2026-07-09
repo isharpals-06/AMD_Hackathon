@@ -12,15 +12,15 @@ Tracked with MLflow:
   - Artifacts: trained model (joblib), confusion matrix (CSV), full report
   - Tags: dataset version, git commit (if available)
 """
+
 from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class TrainingResult:
     parameters: dict[str, Any]
 
 
-def _get_git_commit() -> Optional[str]:
+def _get_git_commit() -> str | None:
     """Return the current git commit hash, or None if not in a git repo."""
     try:
         result = subprocess.run(
@@ -109,27 +109,29 @@ def train(
     X_val, y_val = val_df["prompt"].tolist(), val_df["label"].tolist()
 
     # ── Build pipeline ────────────────────────────────────────────────────────
-    pipeline = Pipeline([
-        (
-            "tfidf",
-            TfidfVectorizer(
-                max_features=max_features,
-                ngram_range=ngram_range,
-                strip_accents="unicode",
-                analyzer="word",
+    pipeline = Pipeline(
+        [
+            (
+                "tfidf",
+                TfidfVectorizer(
+                    max_features=max_features,
+                    ngram_range=ngram_range,
+                    strip_accents="unicode",
+                    analyzer="word",
+                ),
             ),
-        ),
-        (
-            "clf",
-            LogisticRegression(
-                C=C,
-                max_iter=1000,
-                multi_class="multinomial",
-                solver="lbfgs",
-                random_state=42,
+            (
+                "clf",
+                LogisticRegression(
+                    C=C,
+                    max_iter=1000,
+                    multi_class="multinomial",
+                    solver="lbfgs",
+                    random_state=42,
+                ),
             ),
-        ),
-    ])
+        ]
+    )
 
     # ── MLflow tracking ───────────────────────────────────────────────────────
     mlflow.set_tracking_uri(tracking_uri)

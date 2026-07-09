@@ -1,12 +1,10 @@
 """
 Unit tests for app.database — SQLite database layer.
 """
+
 from __future__ import annotations
 
-import os
 import sqlite3
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -37,9 +35,7 @@ class TestInitDb:
     def test_creates_indexes(self, temp_database):
         db_module.init_db()
         conn = sqlite3.connect(temp_database)
-        indexes = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='index'"
-        ).fetchall()
+        indexes = conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()
         index_names = {row[0] for row in indexes}
         assert "idx_task_type" in index_names
         assert "idx_status" in index_names

@@ -1,8 +1,10 @@
-import pytest
 import sqlite3
-import os
 from unittest.mock import patch
+
+import pytest
+
 from app import database
+
 
 class ConnectionProxy:
     def __init__(self, conn):
@@ -21,6 +23,7 @@ class ConnectionProxy:
         # Prevent closing during tests
         pass
 
+
 # Helper to setup in-memory db during test runs
 @pytest.fixture(autouse=True)
 def setup_test_db():
@@ -28,10 +31,11 @@ def setup_test_db():
     conn = sqlite3.connect(":memory:")
     # SQLite requires dict row factory to match app.database behavior
     conn.row_factory = sqlite3.Row
-    
+
     # Initialize tables
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS requests (
             request_id TEXT PRIMARY KEY,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -51,16 +55,18 @@ def setup_test_db():
             latency_ms INTEGER,
             error_message TEXT
         )
-    """)
+    """
+    )
     conn.commit()
-    
+
     proxy = ConnectionProxy(conn)
-    
+
     with patch("app.database.get_db_connection", return_value=proxy):
         yield proxy
-            
+
     # Clean up the actual connection
     conn.close()
+
 
 def test_log_request_and_aggregations():
     """Verify log_request writes data and get_aggregate_metrics aggregates values correctly."""
@@ -80,22 +86,22 @@ def test_log_request_and_aggregations():
         "output_tokens": 8,
         "cost_usd": 0.000024,
         "latency_ms": 1500,
-        "error_message": None
+        "error_message": None,
     }
-    
+
     # Log the request
     database.log_request(record)
-    
+
     # Fetch metrics
     metrics = database.get_aggregate_metrics()
-    
+
     assert metrics["total_requests"] == 1
     assert metrics["successful_requests"] == 1
     assert metrics["total_tokens"] == 20
     assert metrics["total_cost"] == 0.000024
     assert metrics["avg_latency_ms"] == 1500.0
     assert metrics["fallback_count"] == 0
-    
+
     # Verify virtual cost savings calculations are generated
     assert metrics["baseline_cost_usd"] > 0
     assert metrics["cost_saved_usd"] >= 0

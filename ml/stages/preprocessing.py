@@ -7,12 +7,12 @@ the dataset into train/validation/test sets.
 Outputs are saved to `data/processed/` as parquet files for efficient
 downstream loading.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +70,7 @@ def preprocess(
         import pandas as pd
         from sklearn.model_selection import train_test_split
     except ImportError as exc:
-        raise RuntimeError(
-            "pandas and scikit-learn are required for preprocessing."
-        ) from exc
+        raise RuntimeError("pandas and scikit-learn are required for preprocessing.") from exc
 
     data_path = Path(data_path)
     output_dir = Path(output_dir)

@@ -1,15 +1,17 @@
 # Jupyter Notebook Code Blocks for AMD GPU Cloud Execution
 # Copy and paste these cells into your cloud Jupyter Notebook.
 
-import os
+import contextlib
 import gc
-import time
-import torch
 import json
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+import time
+
 import ipywidgets as widgets
-from IPython.display import display, clear_output
+import torch
+from IPython.display import clear_output, display
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
 
 # ==========================================
 # CELL 1: ENVIRONMENT & GPU SYSTEM CHECK
@@ -20,10 +22,11 @@ def run_system_check():
     print(f"GPU Available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"Device Name: {torch.cuda.get_device_name(0)}")
-        total_mem = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+        total_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         print(f"Total VRAM: {total_mem:.2f} GB")
     else:
         print("⚠️ Running in CPU mode. Large models will execute slowly.")
+
 
 # ==========================================
 # CELL 2: DYNAMIC GPU VRAM MANAGER
@@ -36,8 +39,8 @@ class VRAMManager:
         """Returns allocated and reserved GPU memory in GB."""
         if not torch.cuda.is_available():
             return 0.0, 0.0
-        allocated = torch.cuda.memory_allocated(0) / (1024 ** 3)
-        reserved = torch.cuda.memory_reserved(0) / (1024 ** 3)
+        allocated = torch.cuda.memory_allocated(0) / (1024**3)
+        reserved = torch.cuda.memory_reserved(0) / (1024**3)
         return allocated, reserved
 
     @classmethod
@@ -64,10 +67,8 @@ class VRAMManager:
         if name in cls._loaded_models:
             print(f"🧹 Offloading model '{name}' from VRAM...")
             # Move to CPU first to break CUDA links, then delete
-            try:
+            with contextlib.suppress(Exception):
                 cls._loaded_models[name]["model"].to("cpu")
-            except Exception:
-                pass
             del cls._loaded_models[name]["model"]
             del cls._loaded_models[name]["tokenizer"]
             del cls._loaded_models[name]
@@ -82,6 +83,7 @@ class VRAMManager:
             cls.unload(name)
         cls.clean_cache()
 
+
 # ==========================================
 # CELL 3: DYNAMIC MODEL LOADER
 # ==========================================
@@ -90,8 +92,9 @@ MODEL_PATHS = {
     "kimi-k2p7-code": "MoonshotAI/Kimi-K2P7-Code",
     "gemma-4-31b-it": "google/gemma-4-31b-it",
     "gemma-4-26b-a4b-it": "google/gemma-4-26b-a4b-it",
-    "gemma-4-31b-it-nvfp4": "google/gemma-4-31b-it-nvfp4"
+    "gemma-4-31b-it-nvfp4": "google/gemma-4-31b-it-nvfp4",
 }
+
 
 class ModelLoader:
     @staticmethod
@@ -100,7 +103,7 @@ class ModelLoader:
         if model_name in VRAMManager._loaded_models:
             return (
                 VRAMManager._loaded_models[model_name]["model"],
-                VRAMManager._loaded_models[model_name]["tokenizer"]
+                VRAMManager._loaded_models[model_name]["tokenizer"],
             )
 
         # 2. Make room by unloading other models
@@ -117,7 +120,7 @@ class ModelLoader:
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_use_double_quant=True
+                bnb_4bit_use_double_quant=True,
             )
 
         try:
@@ -126,7 +129,7 @@ class ModelLoader:
                 huggingface_path,
                 quantization_config=bnb_config,
                 device_map="auto" if torch.cuda.is_available() else "cpu",
-                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32
+                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
             )
             VRAMManager.register(model_name, model, tokenizer)
             print(f"✓ '{model_name}' loaded successfully!")
@@ -139,6 +142,7 @@ class ModelLoader:
                 return ModelLoader.load(model_name, quantize_4bit=False)
             raise e
 
+
 # ==========================================
 # CELL 4: COGNITIVE SLM ROUTER CLASSIFIER
 # ==========================================
@@ -147,11 +151,35 @@ class TaskClassifier:
     def classify_regex(prompt: str) -> str:
         """Fallback regex classifier if the SLM fails to generate clean JSON."""
         prompt_lower = prompt.lower()
-        if any(kw in prompt_lower for kw in ["code", "function", "regex", "bug", "implement", "loop", "api", "endpoint"]):
+        if any(
+            kw in prompt_lower
+            for kw in ["code", "function", "regex", "bug", "implement", "loop", "api", "endpoint"]
+        ):
             return "coding"
-        if any(kw in prompt_lower for kw in ["solve", "equation", "derivative", "integral", "matrix", "calculate", "limit"]):
+        if any(
+            kw in prompt_lower
+            for kw in [
+                "solve",
+                "equation",
+                "derivative",
+                "integral",
+                "matrix",
+                "calculate",
+                "limit",
+            ]
+        ):
             return "math"
-        if any(kw in prompt_lower for kw in ["summarize", "literature review", "explain", "compare", "research", "historical"]):
+        if any(
+            kw in prompt_lower
+            for kw in [
+                "summarize",
+                "literature review",
+                "explain",
+                "compare",
+                "research",
+                "historical",
+            ]
+        ):
             return "research"
         return "casual_chat"
 
@@ -161,12 +189,12 @@ class TaskClassifier:
         router_model_name = "llama-router"
         adapter_path = "./Multi_Model_Router_Llama3_QLoRA_Finetuning.ipynb/final_model"
         base_model_path = "meta-llama/Llama-3.2-1B"
-        
+
         # 1. Load the routing SLM (unloading other models automatically to save VRAM)
         if router_model_name not in VRAMManager._loaded_models:
             VRAMManager.unload_all_except(router_model_name)
-            VRAMManager.print_vram_status(f"Pre-Load Router SLM")
-            
+            VRAMManager.print_vram_status("Pre-Load Router SLM")
+
             # Configure 4-bit loading for Llama 3.2
             bnb_config = None
             if torch.cuda.is_available():
@@ -174,27 +202,27 @@ class TaskClassifier:
                     load_in_4bit=True,
                     bnb_4bit_quant_type="nf4",
                     bnb_4bit_compute_dtype=torch.bfloat16,
-                    bnb_4bit_use_double_quant=True
+                    bnb_4bit_use_double_quant=True,
                 )
-            
+
             tokenizer = AutoTokenizer.from_pretrained(adapter_path)
             tokenizer.pad_token = tokenizer.eos_token
-            
+
             base_model = AutoModelForCausalLM.from_pretrained(
                 base_model_path,
                 quantization_config=bnb_config,
                 device_map="auto" if torch.cuda.is_available() else "cpu",
-                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32
+                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
             )
             model = PeftModel.from_pretrained(base_model, adapter_path)
             model.eval()
             VRAMManager.register(router_model_name, model, tokenizer)
-            print(f"✓ Router SLM loaded successfully with fine-tuned adapter!")
-            VRAMManager.print_vram_status(f"Post-Load Router SLM")
+            print("✓ Router SLM loaded successfully with fine-tuned adapter!")
+            VRAMManager.print_vram_status("Post-Load Router SLM")
         else:
             model = VRAMManager._loaded_models[router_model_name]["model"]
             tokenizer = VRAMManager._loaded_models[router_model_name]["tokenizer"]
-            
+
         # 2. Format with the Instruction template Llama was trained on
         instruction_prompt = f"""### Instruction:
 You are an intelligent AI model router.
@@ -215,23 +243,20 @@ Return only JSON output.
         input_len = inputs["input_ids"].shape[1]
         if torch.cuda.is_available():
             inputs = {k: v.to("cuda") for k, v in inputs.items()}
-            
+
         try:
             with torch.no_grad():
                 outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=100,
-                    temperature=0.1,
-                    do_sample=True
+                    **inputs, max_new_tokens=100, temperature=0.1, do_sample=True
                 )
             output_text = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
-            
+
             # Parse decision
             decision = json.loads(output_text)
             return {
                 "category": decision.get("task_type", "casual_chat"),
                 "primary_model": decision.get("primary_model", "minimax-m3"),
-                "fallback_model": decision.get("fallback_model", "gemma-4-26b-a4b-it")
+                "fallback_model": decision.get("fallback_model", "gemma-4-26b-a4b-it"),
             }
         except Exception as e:
             print(f"⚠️ SLM router parsing failed: {e}. Falling back to default rules.")
@@ -247,8 +272,9 @@ Return only JSON output.
             return {
                 "category": category,
                 "primary_model": primary,
-                "fallback_model": "gemma-4-26b-a4b-it"
+                "fallback_model": "gemma-4-26b-a4b-it",
             }
+
 
 # ==========================================
 # CELL 5: THE ROUTING & EXECUTION ENGINE
@@ -260,32 +286,34 @@ class RoutingEngine:
         "kimi-k2p7-code": 0.35,
         "gemma-4-26b-a4b-it": 0.80,
         "gemma-4-31b-it": 1.20,
-        "gemma-4-31b-it-nvfp4": 1.00
+        "gemma-4-31b-it-nvfp4": 1.00,
     }
 
     @classmethod
     def execute(cls, prompt: str) -> dict:
         start_time = time.time()
-        
+
         # 1. Query the fine-tuned SLM to make the routing decision
         print("🧠 Querying Fine-Tuned Router SLM for decision...")
         decision = TaskClassifier.classify_with_slm(prompt)
         category = decision["category"]
         target_model = decision["primary_model"]
         fallback_model = decision["fallback_model"]
-        
+
         # Strip provider prefixes if model names match local mappings
         target_model = target_model.replace("ollama:", "").replace("fireworks:", "")
         fallback_model = fallback_model.replace("ollama:", "").replace("fireworks:", "")
-        
+
         # Guard mapping to ensure local model names match exactly
         if target_model == "mixtral" or target_model not in MODEL_PATHS:
             target_model = "kimi-k2p7-code" if category == "coding" else "gemma-4-31b-it"
         if fallback_model == "qwen" or fallback_model not in MODEL_PATHS:
             fallback_model = "gemma-4-26b-a4b-it"
-            
-        print(f"\n[Decision] Category: '{category}' | Primary: '{target_model}' | Fallback: '{fallback_model}'")
-        
+
+        print(
+            f"\n[Decision] Category: '{category}' | Primary: '{target_model}' | Fallback: '{fallback_model}'"
+        )
+
         # 2. Load the execution model (this unloads the router SLM from VRAM)
         fallback_used = False
         try:
@@ -301,14 +329,11 @@ class RoutingEngine:
         input_len = inputs["input_ids"].shape[1]
         if torch.cuda.is_available():
             inputs = {k: v.to("cuda") for k, v in inputs.items()}
-            
+
         try:
             with torch.no_grad():
                 outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=256,
-                    temperature=0.2,
-                    do_sample=True
+                    **inputs, max_new_tokens=256, temperature=0.2, do_sample=True
                 )
             output_text = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True)
             output_len = outputs[0].shape[0] - input_len
@@ -323,19 +348,21 @@ class RoutingEngine:
                 if torch.cuda.is_available():
                     inputs = {k: v.to("cuda") for k, v in inputs.items()}
                 with torch.no_grad():
-                    outputs = model.generate(**inputs, max_new_tokens=256, temperature=0.2, do_sample=True)
+                    outputs = model.generate(
+                        **inputs, max_new_tokens=256, temperature=0.2, do_sample=True
+                    )
                 output_text = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True)
                 output_len = outputs[0].shape[0] - input_len
             else:
                 raise run_err
 
         latency_ms = (time.time() - start_time) * 1000
-        
+
         # Calculate Metrics
         total_tokens = input_len + output_len
         rate = cls.PRICING.get(target_model, 1.0) / 1000000.0
         cost_usd = total_tokens * rate
-        
+
         # Baseline Comparison (always using Gemma-4-31B-it as baseline)
         baseline_rate = cls.PRICING["gemma-4-31b-it"] / 1000000.0
         baseline_cost = total_tokens * baseline_rate
@@ -354,8 +381,9 @@ class RoutingEngine:
             "latency_ms": latency_ms,
             "cost_usd": cost_usd,
             "savings_usd": savings_usd,
-            "savings_pct": savings_pct
+            "savings_pct": savings_pct,
         }
+
 
 # ==========================================
 # CELL 6: TEST SUITE RUNNER
@@ -365,8 +393,9 @@ TESTS = [
     "Solve for x: x^2 - 5x + 6 = 0.",
     "Write a quick python function to reverse a string.",
     "Summarize the primary biological functions of the cell membrane.",
-    "Explain the concept of quantum superposition in simple terms."
+    "Explain the concept of quantum superposition in simple terms.",
 ]
+
 
 def run_notebook_test_suite():
     results = []
@@ -376,14 +405,15 @@ def run_notebook_test_suite():
         results.append(res)
         print(f"Output: {res['response'][:100]}...")
         print(f"Metrics: Latency={res['latency_ms']:.0f}ms | Savings={res['savings_pct']:.1f}%")
-        
-    print("\n" + "="*40 + "\nAggregated Metrics:")
+
+    print("\n" + "=" * 40 + "\nAggregated Metrics:")
     total_cost = sum(r["cost_usd"] for r in results)
     total_saved = sum(r["savings_usd"] for r in results)
     avg_latency = sum(r["latency_ms"] for r in results) / len(results)
     print(f"Average Latency: {avg_latency:.1f} ms")
     print(f"Total Combined Cost: ${total_cost:.6f}")
     print(f"Total Money Saved: ${total_saved:.6f}")
+
 
 # ==========================================
 # CELL 7: INTERACTIVE NOTEBOOK WIDGET CONSOLE
@@ -394,12 +424,10 @@ def display_widget_console():
         value="Solve the equation 2x + 10 = 20.",
         placeholder="Enter your instruction here...",
         description="Prompt:",
-        layout=widgets.Layout(width="100%", height="85px")
+        layout=widgets.Layout(width="100%", height="85px"),
     )
     run_button = widgets.Button(
-        description="Route & Execute",
-        button_style="success",
-        icon="rocket"
+        description="Route & Execute", button_style="success", icon="rocket"
     )
     output_console = widgets.Output()
 
@@ -410,22 +438,30 @@ def display_widget_console():
             if not user_prompt:
                 print("Error: Input prompt cannot be empty.")
                 return
-            
+
             print("⏳ Processing prompt in AMD model router...")
             result = RoutingEngine.execute(user_prompt)
-            
+
             clear_output()
             print(f"### CLASSIFIED CATEGORY: {result['category'].upper()}")
-            print(f"ROUTED TO: {result['model_used'].upper()} (Fallback Used: {result['fallback_used']})")
+            print(
+                f"ROUTED TO: {result['model_used'].upper()} (Fallback Used: {result['fallback_used']})"
+            )
             print("=" * 50)
             print(f"RESPONSE:\\n{result['response']}")
             print("=" * 50)
-            print(f"Tokens: Input={result['input_tokens']} | Output={result['output_tokens']} | Total={result['total_tokens']}")
+            print(
+                f"Tokens: Input={result['input_tokens']} | Output={result['output_tokens']} | Total={result['total_tokens']}"
+            )
             print(f"Latency: {result['latency_ms']:.0f} ms")
-            print(f"Estimated Cost: ${result['cost_usd']:.6f} (Savings: {result['savings_pct']:.1f}%)")
-            
+            print(
+                f"Estimated Cost: ${result['cost_usd']:.6f} (Savings: {result['savings_pct']:.1f}%)"
+            )
+
             alloc_vram, res_vram = VRAMManager.get_vram_usage()
-            print(f"\n[GPU VRAM Status] Allocated: {alloc_vram:.2f} GB | Reserved: {res_vram:.2f} GB")
+            print(
+                f"\n[GPU VRAM Status] Allocated: {alloc_vram:.2f} GB | Reserved: {res_vram:.2f} GB"
+            )
 
     run_button.on_click(handle_click)
     display(console_title, prompt_input, run_button, output_console)

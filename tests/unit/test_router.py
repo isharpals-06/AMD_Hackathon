@@ -1,6 +1,7 @@
 """
 Unit tests for app.services.router — RoutingEngine.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -41,12 +42,14 @@ class TestGetRouting:
 
     def test_math_uses_correct_primary_model(self):
         from app import config
+
         result = RoutingEngine.get_routing("math")
         expected = config.MATH_PRIMARY_MODEL or "gemma-4-31b-it"
         assert expected in result["primary_model"]
 
     def test_coding_uses_correct_primary_model(self):
         from app import config
+
         result = RoutingEngine.get_routing("coding")
         expected = config.CODING_PRIMARY_MODEL or "kimi-k2p7-code"
         assert expected in result["primary_model"]

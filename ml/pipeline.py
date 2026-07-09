@@ -11,11 +11,11 @@ Usage:
     python -m ml.pipeline promote --version 1.0.0
     python -m ml.pipeline rollback --version 0.9.0
 """
+
 from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 import click
 
