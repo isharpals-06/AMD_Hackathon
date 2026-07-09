@@ -34,8 +34,7 @@ def setup_test_db():
 
     # Initialize tables
     cursor = conn.cursor()
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS requests (
             request_id TEXT PRIMARY KEY,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -55,8 +54,7 @@ def setup_test_db():
             latency_ms INTEGER,
             error_message TEXT
         )
-    """
-    )
+    """)
     conn.commit()
 
     proxy = ConnectionProxy(conn)

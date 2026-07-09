@@ -42,8 +42,7 @@ def init_db() -> None:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS requests (
                 request_id      TEXT PRIMARY KEY,
                 created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,8 +62,7 @@ def init_db() -> None:
                 latency_ms      INTEGER,
                 error_message   TEXT
             )
-        """
-        )
+        """)
 
         # Indexes for fast querying on the dashboard
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_type ON requests(task_type)")
@@ -106,8 +104,7 @@ def get_aggregate_metrics() -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT
                 COUNT(*)                                                        AS total_requests,
                 SUM(CASE WHEN status LIKE 'success%' THEN 1 ELSE 0 END)        AS successful_requests,
@@ -116,8 +113,7 @@ def get_aggregate_metrics() -> dict[str, Any]:
                 AVG(latency_ms)                                                 AS avg_latency_ms,
                 SUM(CASE WHEN fallback_model_used = 1 THEN 1 ELSE 0 END)       AS fallback_count
             FROM requests
-        """
-        )
+        """)
         row = cursor.fetchone()
         metrics: dict[str, Any] = dict(row) if row else {}
 
@@ -131,51 +127,43 @@ def get_aggregate_metrics() -> dict[str, Any]:
         metrics["total_cost_usd"] = metrics.get("total_cost") or 0.0
 
         # ── Per-task-type counts ─────────────────────────────────────────
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT task_type, COUNT(*) AS cnt
             FROM requests
             WHERE task_type IS NOT NULL
             GROUP BY task_type
-        """
-        )
+        """)
         metrics["task_type_counts"] = {r["task_type"]: r["cnt"] for r in cursor.fetchall()}
 
         # ── Avg latency by task type ─────────────────────────────────────
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT task_type, AVG(latency_ms) AS avg_lat
             FROM requests
             WHERE task_type IS NOT NULL
             GROUP BY task_type
-        """
-        )
+        """)
         metrics["avg_latency_by_type"] = {
             r["task_type"]: round(r["avg_lat"], 1) for r in cursor.fetchall()
         }
 
         # ── Token breakdown: local (ollama) vs cloud (huggingface/fireworks) ─
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT
                 SUM(CASE WHEN final_model_used LIKE 'ollama:%' THEN tokens_used ELSE 0 END)       AS local_tokens,
                 SUM(CASE WHEN final_model_used NOT LIKE 'ollama:%' THEN tokens_used ELSE 0 END)   AS cloud_tokens
             FROM requests
             WHERE status LIKE 'success%'
-        """
-        )
+        """)
         token_row = cursor.fetchone()
         metrics["local_tokens_used"] = (token_row["local_tokens"] or 0) if token_row else 0
         metrics["cloud_tokens_used"] = (token_row["cloud_tokens"] or 0) if token_row else 0
 
         # ── Cost-savings vs. always-Fireworks baseline ───────────────────
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT SUM(input_tokens) AS total_input, SUM(output_tokens) AS total_output
             FROM requests
             WHERE status LIKE 'success%'
-        """
-        )
+        """)
         totals = cursor.fetchone()
         if totals and totals["total_input"] is not None:
             baseline_cost = (totals["total_input"] * 0.0005 / 1000) + (
@@ -201,8 +189,7 @@ def get_per_model_metrics() -> list[dict[str, Any]]:
     """Return per-model breakdown: request count, avg latency, total cost."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT
                 final_model_used                AS model,
                 COUNT(*)                        AS request_count,
@@ -213,6 +200,5 @@ def get_per_model_metrics() -> list[dict[str, Any]]:
             WHERE final_model_used IS NOT NULL
             GROUP BY final_model_used
             ORDER BY request_count DESC
-        """
-        )
+        """)
         return [dict(row) for row in cursor.fetchall()]

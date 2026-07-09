@@ -319,7 +319,9 @@ class RoutingEngine:
         try:
             model, tokenizer = ModelLoader.load(target_model)
         except Exception as e:
-            print(f"⚠️ Primary model '{target_model}' failed to load: {e}. Switching to fallback...")
+            print(
+                f"⚠️ Primary model '{target_model}' failed to load: {e}. Switching to fallback..."
+            )
             target_model = fallback_model
             fallback_used = True
             model, tokenizer = ModelLoader.load(target_model)
