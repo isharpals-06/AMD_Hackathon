@@ -52,4 +52,6 @@ Thumbs.db
 
 # ─── Tests & Temporary ────────────────────────────────────────────────────────
 :memory:/
+scratch/
+error/
 
