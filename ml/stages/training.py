@@ -125,7 +125,6 @@ def train(
                 LogisticRegression(
                     C=C,
                     max_iter=1000,
-                    multi_class="multinomial",
                     solver="lbfgs",
                     random_state=42,
                 ),

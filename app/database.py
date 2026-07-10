@@ -29,7 +29,8 @@ DATABASE_FILE: str = config.DATABASE_FILE
 def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
     """Context manager that yields an open SQLite connection and closes it on exit."""
     os.makedirs(os.path.dirname(os.path.abspath(DATABASE_FILE)), exist_ok=True)
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = sqlite3.connect(DATABASE_FILE, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row
     try:
         yield conn

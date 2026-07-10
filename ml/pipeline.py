@@ -72,7 +72,7 @@ def cli():
     show_default=True,
     help="TF-IDF vocabulary size.",
 )
-@click.option("--C", "reg_C", default=1.0, show_default=True, help="Logistic Regression C.")
+@click.option("--C", "reg_c", default=1.0, show_default=True, help="Logistic Regression C.")
 @click.option(
     "--skip-validation",
     is_flag=True,

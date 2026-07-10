@@ -1,0 +1,27 @@
+{
+  "versions": [
+    {
+      "version": "1.0.0",
+      "mlflow_run_id": "024b794b23e2488aab9e3216d1808267",
+      "model_path": "models\\classifier\\classifier.joblib",
+      "stage": "production",
+      "metrics": {
+        "accuracy": 0.99,
+        "macro_f1": 0.99
+      },
+      "parameters": {
+        "max_features": 10000,
+        "C": 1.0,
+        "ngram_range": [
+          1,
+          2
+        ],
+        "train_size": 1400,
+        "val_size": 300
+      },
+      "git_commit": null,
+      "registered_at": "2026-07-10T07:43:37.373908+00:00",
+      "promoted_at": "2026-07-10T07:43:37.377127+00:00"
+    }
+  ]
+}
