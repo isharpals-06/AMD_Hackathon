@@ -26,7 +26,10 @@ class TaskClassifier:
         if CHROMADB_AVAILABLE:
             try:
                 # Initialize local ChromaDB client for vector lookup fallback
-                self.chroma_client = chromadb.PersistentClient(path=persist_directory)
+                if persist_directory == ":memory:":
+                    self.chroma_client = chromadb.EphemeralClient()
+                else:
+                    self.chroma_client = chromadb.PersistentClient(path=persist_directory)
                 self.collection = self.chroma_client.get_or_create_collection(
                     name="routing_seed_prompts"
                 )
@@ -206,12 +209,42 @@ Return only JSON output.
             )
             output_text = result.get("text", "").strip()
 
-            decision = json.loads(output_text)
+            # Robust JSON extraction to handle model prefixes like "assistant\n\n"
+            json_match = re.search(r"\{.*\}", output_text, re.DOTALL)
+            if json_match:
+                output_text = json_match.group(0)
+
+            try:
+                decision = json.loads(output_text)
+            except Exception:
+                import ast
+
+                decision = ast.literal_eval(output_text)
+
             logger.info(f"Tier 1 SLM routing decision succeeded: {decision}")
+
+            raw_category = (
+                (decision.get("task_type") or decision.get("task_category") or "casual_chat")
+                .lower()
+                .strip()
+            )
+            if "prog" in raw_category or "cod" in raw_category:
+                category = "coding"
+            elif "math" in raw_category:
+                category = "math"
+            elif "research" in raw_category or "q&a" in raw_category or "qa" in raw_category:
+                category = "research"
+            else:
+                category = "casual_chat"
+
+            from app.services.router import RoutingEngine
+
+            rules = RoutingEngine.get_routing(category)
+
             return {
-                "category": decision.get("task_type", "casual_chat"),
-                "primary_model": decision.get("primary_model", "ollama:minimax-m3"),
-                "fallback_model": decision.get("fallback_model", "ollama:gemma-4-26b-a4b-it"),
+                "category": category,
+                "primary_model": rules.get("primary_model"),
+                "fallback_model": rules.get("fallback_model"),
             }
         except Exception as slm_err:
             logger.warning(f"Tier 1 SLM router failed: {slm_err}. Switching to Tier 2 (ChromaDB).")
@@ -221,19 +254,14 @@ Return only JSON output.
             category = await self.classify_chromadb(prompt)
             logger.info(f"Tier 2 ChromaDB classification succeeded: '{category}'")
 
-            # Default model mapping for category
-            primary = "ollama:minimax-m3"
-            if category == "coding":
-                primary = "ollama:kimi-k2p7-code"
-            elif category == "math":
-                primary = "ollama:gemma-4-31b-it"
-            elif category == "research":
-                primary = "ollama:gemma-4-26b-a4b-it"
+            from app.services.router import RoutingEngine
+
+            rules = RoutingEngine.get_routing(category)
 
             return {
                 "category": category,
-                "primary_model": primary,
-                "fallback_model": "ollama:gemma-4-26b-a4b-it",
+                "primary_model": rules.get("primary_model"),
+                "fallback_model": rules.get("fallback_model"),
             }
         except Exception as chroma_err:
             logger.warning(f"Tier 2 ChromaDB failed: {chroma_err}. Switching to Tier 3 (Regex).")
@@ -241,16 +269,13 @@ Return only JSON output.
         # --- TIER 3: Regex Fallback ---
         category = self.classify_regex(prompt)
         logger.info(f"Tier 3 Regex classification succeeded: '{category}'")
-        primary = "ollama:minimax-m3"
-        if category == "coding":
-            primary = "ollama:kimi-k2p7-code"
-        elif category == "math":
-            primary = "ollama:gemma-4-31b-it"
-        elif category == "research":
-            primary = "ollama:gemma-4-26b-a4b-it"
+
+        from app.services.router import RoutingEngine
+
+        rules = RoutingEngine.get_routing(category)
 
         return {
             "category": category,
-            "primary_model": primary,
-            "fallback_model": "ollama:gemma-4-26b-a4b-it",
+            "primary_model": rules.get("primary_model"),
+            "fallback_model": rules.get("fallback_model"),
         }

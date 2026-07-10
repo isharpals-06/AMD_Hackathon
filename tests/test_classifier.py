@@ -5,6 +5,21 @@ import pytest
 from app.services.classifier import TaskClassifier
 
 
+@pytest.fixture(autouse=True)
+def mock_no_config_overrides():
+    with (
+        patch("app.config.MATH_PRIMARY_MODEL", ""),
+        patch("app.config.MATH_FALLBACK_MODEL", ""),
+        patch("app.config.CODING_PRIMARY_MODEL", ""),
+        patch("app.config.CODING_FALLBACK_MODEL", ""),
+        patch("app.config.RESEARCH_PRIMARY_MODEL", ""),
+        patch("app.config.RESEARCH_FALLBACK_MODEL", ""),
+        patch("app.config.CASUAL_PRIMARY_MODEL", ""),
+        patch("app.config.CASUAL_FALLBACK_MODEL", ""),
+    ):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_regex_classification():
     """Verify Tier 3 Regex classification maps keywords correctly."""
