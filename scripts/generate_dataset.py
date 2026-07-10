@@ -505,23 +505,42 @@ def generate_random_prompt(category: str) -> str:
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate synthetic dataset of prompts.")
+    parser.add_argument(
+        "--num",
+        "-n",
+        type=int,
+        default=2000,
+        help="Total number of prompts to generate (default: 2000)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducibility (default: None for dynamic)",
+    )
+    args = parser.parse_args()
+
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
 
     all_records = []
-    total_target = 2000
+    total_target = args.num
     target_per_category = total_target // len(CATEGORIES)
 
     print(
         f"Generating synthetic dataset of {total_target} prompts ({target_per_category} per category)..."
     )
 
-    # For reproducibility
-    random.seed(42)
+    # Apply seed if provided, otherwise let it be dynamic
+    if args.seed is not None:
+        print(f"Using fixed random seed: {args.seed}")
+        random.seed(args.seed)
 
     for category in CATEGORIES:
         category_prompts = set()
         attempts = 0
-        # Check attempts threshold
         max_attempts = target_per_category * 20
 
         while len(category_prompts) < target_per_category and attempts < max_attempts:
@@ -533,7 +552,6 @@ def main():
             f"✓ Generated {len(category_prompts)} unique prompts for '{category}' (in {attempts} attempts)"
         )
 
-        # Fallback: if we couldn't generate enough unique prompts, populate with duplicate selections
         prompts_list = list(category_prompts)
         if len(prompts_list) < target_per_category:
             needed = target_per_category - len(prompts_list)
@@ -546,7 +564,7 @@ def main():
         for prompt in prompts_list:
             all_records.append({"prompt": prompt, "category": category})
 
-    # Shuffle dataset to mix categories
+    # Shuffle dataset
     random.shuffle(all_records)
 
     print(f"\nWriting dataset to {OUTPUT_FILE}...")
