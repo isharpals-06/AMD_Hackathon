@@ -168,7 +168,7 @@ OLLAMA_ROUTER_MODEL=llama3-router
 OLLAMA_TIMEOUT=30
 CHROMADB_DIR=./data/chromadb
 DATABASE_URL=sqlite:///./data/metrics.db
-HF_TOKEN=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
+HF_TOKEN=your_huggingface_token_here
 # Model routing is configured in configs/routing_rules.yaml
 MATH_PRIMARY_MODEL=huggingface:Qwen/Qwen2.5-72B-Instruct
 # ... (additional model mappings in .env lines 32-43)
@@ -305,7 +305,7 @@ CATEGORIES: math, coding, research, casual_chat
 ROUTING CONFIG: configs/routing_rules.yaml maps categories to primary/fallback models
 
 CRITICAL CONTEXT:
-- HF_TOKEN: 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 (has Inference Providers scope)
+- HF_TOKEN: Configured locally in .env (requires Inference Providers scope)
 - HF endpoint: https://router.huggingface.co/v1/chat/completions (unified, NOT /hf-inference/)
 - GPU: NVIDIA RTX 5050 (8GB VRAM, CUDA 12.0)
 - Python: 3.11 via uv
